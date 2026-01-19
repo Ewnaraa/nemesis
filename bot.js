@@ -1390,7 +1390,7 @@ async function handleReferralCommand(interaction) {
     .addFields(
       { 
         name: '📌 Votre code de parrainage', 
-        value: `\`${stats.code}\`\n\n💡 **C'est votre Discord User ID !**\nVos amis l'entrent lors de l'activation de leur licence.`, 
+        value: `\`${stats.code}\`\n\n💡 **C'est votre code de parrainage !**\nVos amis l'entrent lors de l'activation de leur licence.`, 
         inline: false 
       },
       { name: '👥 Total parrainés', value: stats.totalReferrals.toString(), inline: true },
@@ -1416,7 +1416,7 @@ async function handleReferralCommand(interaction) {
   
   embed.addFields({
     name: '📋 Comment ça marche ?',
-    value: '1️⃣ Partagez **votre Discord User ID** (ci-dessus) avec vos amis\n2️⃣ Ils l\'entrent dans le champ "Code de parrainage" lors de l\'activation\n3️⃣ Vous gagnez **10% de réduction** par filleul actif\n4️⃣ Les réductions sont **cumulables** (max 50%)',
+    value: '1️⃣ Partagez **votre code de parrainage** (ci-dessus) avec vos amis\n2️⃣ Ils l\'entrent dans le champ "Code de parrainage" lors de l\'activation\n3️⃣ Vous gagnez **10% de réduction** par filleul actif\n4️⃣ Les réductions sont **cumulables** (max 50%)',
     inline: false
   });
   
