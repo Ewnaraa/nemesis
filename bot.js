@@ -218,22 +218,29 @@ const commands = [
         .setRequired(true)
     ),
   
-  // Commande /extend - ✅ AMÉLIORÉE
-  new SlashCommandBuilder()
-    .setName('extend')
-    .setDescription('[ADMIN] Prolonger une licence')
-    .addStringOption(option =>
-      option
-        .setName('key')
-        .setDescription('Clé de licence')
-        .setRequired(false)
-    )
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(false)
-    )
+ new SlashCommandBuilder()
+  .setName('extend')
+  .setDescription('[ADMIN] Prolonger une licence')
+  .addIntegerOption(option =>  // ✅ required: TRUE EN PREMIER
+    option
+      .setName('days')
+      .setDescription('Nombre de jours à ajouter')
+      .setRequired(true)
+      .setMinValue(1)
+      .setMaxValue(365)
+  )
+  .addStringOption(option =>  // ✅ required: false APRÈS
+    option
+      .setName('key')
+      .setDescription('Clé de licence')
+      .setRequired(false)
+  )
+  .addUserOption(option =>  // ✅ required: false APRÈS
+    option
+      .setName('user')
+      .setDescription('Utilisateur Discord')
+      .setRequired(false)
+  ),
     .addIntegerOption(option =>
       option
         .setName('days')
@@ -859,9 +866,9 @@ async function handleUnlinkCommand(interaction) {
 }
 
 async function handleExtendCommand(interaction) {
+  const days = interaction.options.getInteger('days'); // ✅ EN PREMIER
   const key = interaction.options.getString('key');
   const user = interaction.options.getUser('user');
-  const days = interaction.options.getInteger('days');
   
   // ✅ Validation
   if (!key && !user) {
