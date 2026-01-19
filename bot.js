@@ -5,6 +5,12 @@ const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuild
 const express = require('express');
 const cors = require('cors');
 const { connectDatabase, createLicense, verifyLicense, revokeLicense, getStats, License, Log } = require('./database');
+const { 
+  recordReferral, 
+  getReferralStats, 
+  updateReferralOnPurchase,
+  getOrCreateReferral
+} = require('./referral-system');
 
 // ========== CONFIGURATION ==========
 const ADMIN_IDS = process.env.ADMIN_IDS?.split(',') || [];
@@ -84,7 +90,36 @@ app.post('/api/verify', async (req, res) => {
   
   res.json(result);
 });
+// Enregistrer un parrainage
+app.post('/api/referral/record', async (req, res) => {
+  const { referrerCode, referredUserId, referredUsername } = req.body;
+  
+  if (!referrerCode || !referredUserId) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Code parrain et Discord User ID requis' 
+    });
+  }
+  
+  console.log(`[API] [REFERRAL] ${referredUsername} utilise code: ${referrerCode}`);
+  
+  const result = await recordReferral(referrerCode, referredUserId, referredUsername);
+  
+  res.json(result);
+});
 
+// Stats de parrainage
+app.get('/api/referral/:discordUserId', async (req, res) => {
+  const { discordUserId } = req.params;
+  
+  try {
+    const stats = await getReferralStats(discordUserId);
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('[API] [REFERRAL] Erreur:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
 // Obtenir info sur une licence
 app.get('/api/license/:key', async (req, res) => {
   const { key } = req.params;
@@ -338,6 +373,27 @@ const commands = [
         .setDescription('Confirmer la suppression (True = oui)')
         .setRequired(true)
     )
+  // Commande /referral
+  new SlashCommandBuilder()
+    .setName('referral')
+    .setDescription('Voir vos statistiques de parrainage'),
+
+  // Commande /refer (ADMIN)
+  new SlashCommandBuilder()
+    .setName('refer')
+    .setDescription('[ADMIN] Enregistrer un parrainage manuellement')
+    .addUserOption(option =>
+      option
+        .setName('referrer')
+        .setDescription('Utilisateur parrain')
+        .setRequired(true)
+    )
+    .addUserOption(option =>
+      option
+        .setName('referred')
+        .setDescription('Utilisateur filleul')
+        .setRequired(true)
+    ),
 ];
 
 // ========== ENREGISTRER LES COMMANDES ==========
@@ -437,6 +493,13 @@ client.on('interactionCreate', async (interaction) => {
       case 'cleanup':
         await handleCleanupCommand(interaction);
         break;
+        case 'referral':
+      await handleReferralCommand(interaction);
+      break;
+      
+    case 'refer':
+      await handleReferCommand(interaction);
+      break;
     }
   } catch (error) {
     console.error(`❌ [COMMAND] Erreur ${commandName}:`, error);
@@ -1315,6 +1378,105 @@ async function handleCleanupCommand(interaction) {
   }
 }
 
+// ========== HANDLERS PARRAINAGE ==========
+
+async function handleReferralCommand(interaction) {
+  const stats = await getReferralStats(interaction.user.id);
+  
+  const embed = new EmbedBuilder()
+    .setColor(0x8b5cf6)
+    .setTitle('🎁 Votre Programme de Parrainage')
+    .setDescription('Invitez vos amis et gagnez des réductions !')
+    .addFields(
+      { 
+        name: '📌 Votre code de parrainage', 
+        value: `\`${stats.code}\`\n\n💡 **C'est votre Discord User ID !**\nVos amis l'entrent lors de l'activation de leur licence.`, 
+        inline: false 
+      },
+      { name: '👥 Total parrainés', value: stats.totalReferrals.toString(), inline: true },
+      { name: '✅ Actifs (avec licence)', value: stats.activeReferrals.toString(), inline: true },
+      { name: '💰 Réduction actuelle', value: `${stats.discount}%`, inline: true }
+    );
+  
+  if (stats.lifetimeEarnings > 0) {
+    embed.addFields({
+      name: '🎉 Total économisé',
+      value: `${stats.lifetimeEarnings.toFixed(2)}€`,
+      inline: true
+    });
+  }
+  
+  if (stats.referredBy) {
+    embed.addFields({
+      name: '🙏 Parrainé par',
+      value: `<@${stats.referredBy}>`,
+      inline: true
+    });
+  }
+  
+  embed.addFields({
+    name: '📋 Comment ça marche ?',
+    value: '1️⃣ Partagez **votre Discord User ID** (ci-dessus) avec vos amis\n2️⃣ Ils l\'entrent dans le champ "Code de parrainage" lors de l\'activation\n3️⃣ Vous gagnez **10% de réduction** par filleul actif\n4️⃣ Les réductions sont **cumulables** (max 50%)',
+    inline: false
+  });
+  
+  // Liste des filleuls
+  if (stats.hasReferrals && stats.referrals && stats.referrals.length > 0) {
+    const referralsList = stats.referrals
+      .slice(0, 5)
+      .map(r => {
+        const status = r.hasActiveLicense ? '✅' : '⏳';
+        const spent = r.totalSpent > 0 ? ` (${r.totalSpent}€)` : '';
+        return `${status} ${r.username}${spent}`;
+      })
+      .join('\n');
+    
+    embed.addFields({
+      name: `👥 Vos filleuls (${stats.referrals.length})`,
+      value: referralsList,
+      inline: false
+    });
+  }
+  
+  embed.setFooter({ text: 'Plus vous parrainez, plus vous économisez !' });
+  embed.setTimestamp();
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+async function handleReferCommand(interaction) {
+  const isAdmin = ADMIN_IDS.includes(interaction.user.id);
+  
+  if (!isAdmin) {
+    return interaction.reply({
+      content: '❌ Cette commande est réservée aux administrateurs.',
+      ephemeral: true
+    });
+  }
+  
+  const referrer = interaction.options.getUser('referrer');
+  const referred = interaction.options.getUser('referred');
+  
+  const result = await recordReferral(referrer.id, referred.id, referred.username);
+  
+  if (!result.success) {
+    return interaction.reply({
+      content: `❌ ${result.error}`,
+      ephemeral: true
+    });
+  }
+  
+  const embed = new EmbedBuilder()
+    .setColor(0x10b981)
+    .setTitle('✅ Parrainage Enregistré')
+    .addFields(
+      { name: '🎯 Parrain', value: `<@${referrer.id}>`, inline: true },
+      { name: '👤 Filleul', value: `<@${referred.id}>`, inline: true }
+    )
+    .setTimestamp();
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
 // ========== DÉMARRAGE ==========
 
 async function start() {
@@ -1380,5 +1542,6 @@ process.on('SIGINT', async () => {
   await client.destroy();
   process.exit(0);
 });
+
 
 start();
