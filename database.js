@@ -2,7 +2,6 @@
 
 const mongoose = require('mongoose');
 
-// ========== SCHÉMA LICENSE ==========
 const licenseSchema = new mongoose.Schema({
   key: {
     type: String,
@@ -15,7 +14,7 @@ const licenseSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  discordUserId: {  // ✅ OBLIGATOIRE
+  discordUserId: {
     type: String,
     required: true,
     index: true
@@ -38,7 +37,7 @@ const licenseSchema = new mongoose.Schema({
     default: Date.now
   },
   
-  expiresAt: {  // ✅ OBLIGATOIRE
+  expiresAt: {
     type: Date,
     required: true
   },
@@ -48,7 +47,17 @@ const licenseSchema = new mongoose.Schema({
     default: null
   },
   
-  usageCount: {
+  lastVerified: {  // ✅ NOUVEAU : Dernière vérification
+    type: Date,
+    default: null
+  },
+  
+  usageCount: {  // ✅ MODIFIÉ : Nombre de votes réussis (pas de vérifications)
+    type: Number,
+    default: 0
+  },
+  
+  verificationCount: {  // ✅ NOUVEAU : Nombre total de vérifications
     type: Number,
     default: 0
   },
@@ -76,7 +85,6 @@ licenseSchema.index({ discordUserId: 1, status: 1 });
 licenseSchema.methods.isValid = function() {
   if (this.status !== 'active') return false;
   
-  // ✅ Vérification stricte de l'expiration
   if (this.expiresAt && this.expiresAt < new Date()) {
     this.status = 'expired';
     this.save();
@@ -86,12 +94,37 @@ licenseSchema.methods.isValid = function() {
   return true;
 };
 
-// Méthode pour enregistrer une utilisation
+// ✅ NOUVEAU : Méthode pour enregistrer une simple vérification
+licenseSchema.methods.recordVerification = async function(ipAddress, discordUserId) {
+  this.lastVerified = new Date();
+  this.verificationCount += 1;
+  
+  if (this.discordUserId !== discordUserId) {
+    throw new Error('Discord User ID mismatch');
+  }
+  
+  // Enregistrer l'IP
+  const existingIp = this.ipAddresses.find(item => item.ip === ipAddress);
+  if (existingIp) {
+    existingIp.lastSeen = new Date();
+  } else {
+    this.ipAddresses.push({
+      ip: ipAddress,
+      firstSeen: new Date(),
+      lastSeen: new Date()
+    });
+  }
+  
+  await this.save();
+};
+
+// ✅ MODIFIÉ : Méthode pour enregistrer une utilisation réelle (vote)
 licenseSchema.methods.recordUsage = async function(ipAddress, discordUserId) {
   this.lastUsed = new Date();
-  this.usageCount += 1;
+  this.lastVerified = new Date();
+  this.usageCount += 1;  // ✅ Seulement pour les votes réussis
+  this.verificationCount += 1;
   
-  // ✅ VÉRIFICATION STRICTE : Le Discord User ID doit correspondre
   if (this.discordUserId !== discordUserId) {
     throw new Error('Discord User ID mismatch');
   }
