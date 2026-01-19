@@ -263,7 +263,32 @@ const commands = [
         .setName('user')
         .setDescription('Utilisateur Discord')
         .setRequired(true)
-    )
+    ),
+  // Commande /licenses - ✅ NOUVELLE
+new SlashCommandBuilder()
+  .setName('licenses')
+  .setDescription('[ADMIN] Liste toutes les licences actives')
+  .addStringOption(option =>
+    option
+      .setName('filter')
+      .setDescription('Filtrer par statut')
+      .setRequired(false)
+      .addChoices(
+        { name: '✅ Actives uniquement', value: 'active' },
+        { name: '⏰ Expirent bientôt (7j)', value: 'expiring' },
+        { name: '🚫 Révoquées', value: 'revoked' },
+        { name: '⏱️ Expirées', value: 'expired' },
+        { name: '📊 Toutes', value: 'all' }
+      )
+  )
+  .addIntegerOption(option =>
+    option
+      .setName('limit')
+      .setDescription('Nombre max de résultats (défaut: 10)')
+      .setRequired(false)
+      .setMinValue(1)
+      .setMaxValue(50)
+  )
 ];
 
 // ========== ENREGISTRER LES COMMANDES ==========
@@ -355,6 +380,10 @@ client.on('interactionCreate', async (interaction) => {
       case 'userlogs':
         await handleUserLogsCommand(interaction);
         break;
+        
+      case 'licenses':
+  await handleLicensesCommand(interaction);
+  break;
     }
   } catch (error) {
     console.error(`❌ [COMMAND] Erreur ${commandName}:`, error);
@@ -703,23 +732,52 @@ async function handleCheckCommand(interaction) {
 }
 
 async function handleStatsCommand(interaction) {
-  const stats = await getStats();
+  await interaction.deferReply({ ephemeral: true });
   
-  const embed = new EmbedBuilder()
-    .setColor(0x6366f1)
-    .setTitle('📊 Statistiques Licences')
-    .addFields(
-      { name: 'Total', value: stats.total.toString(), inline: true },
-      { name: 'Actives', value: `✅ ${stats.active}`, inline: true },
-      { name: 'Révoquées', value: `🚫 ${stats.revoked}`, inline: true },
-      { name: 'Expirées', value: `⏰ ${stats.expired}`, inline: true },
-      { name: '🔗 Liées Discord', value: stats.linked.toString(), inline: true },
-      { name: '⚠️ Expirent bientôt', value: `${stats.expiringSoon} (7 jours)`, inline: true }
-    )
-    .setFooter({ text: 'Auto Vote Bot' })
-    .setTimestamp();
-  
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  try {
+    const stats = await getStats();
+    
+    // Récupérer les 5 utilisateurs les plus actifs
+    const topUsers = await License.find({ status: 'active' })
+      .sort({ usageCount: -1 })
+      .limit(5);
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x6366f1)
+      .setTitle('📊 Statistiques Licences')
+      .addFields(
+        { name: 'Total', value: stats.total.toString(), inline: true },
+        { name: 'Actives', value: `✅ ${stats.active}`, inline: true },
+        { name: 'Révoquées', value: `🚫 ${stats.revoked}`, inline: true },
+        { name: 'Expirées', value: `⏰ ${stats.expired}`, inline: true },
+        { name: '🔗 Liées Discord', value: stats.linked.toString(), inline: true },
+        { name: '⚠️ Expirent bientôt', value: `${stats.expiringSoon} (7 jours)`, inline: true }
+      );
+    
+    if (topUsers.length > 0) {
+      const topUsersText = topUsers.map((license, index) => {
+        const medal = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][index];
+        return `${medal} <@${license.discordUserId}> - ${license.usageCount} votes`;
+      }).join('\n');
+      
+      embed.addFields({
+        name: '🏆 Top 5 Utilisateurs',
+        value: topUsersText,
+        inline: false
+      });
+    }
+    
+    embed.setFooter({ text: 'Auto Vote Bot' });
+    embed.setTimestamp();
+    
+    await interaction.editReply({ embeds: [embed] });
+    
+  } catch (error) {
+    console.error('❌ [STATS] Erreur:', error);
+    await interaction.editReply({
+      content: '❌ Erreur lors de la récupération des statistiques'
+    });
+  }
 }
 
 async function handleLogsCommand(interaction) {
@@ -1077,6 +1135,138 @@ async function handleCheckWithLicense(interaction, license) {
   
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
+async function handleLicensesCommand(interaction) {
+  await interaction.deferReply({ ephemeral: true });
+  
+  const filter = interaction.options.getString('filter') || 'active';
+  const limit = interaction.options.getInteger('limit') || 10;
+  
+  try {
+    let query = {};
+    
+    // Construire la requête selon le filtre
+    switch (filter) {
+      case 'active':
+        query = { status: 'active' };
+        break;
+      case 'expiring':
+        const now = new Date();
+        const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        query = { 
+          status: 'active',
+          expiresAt: { $lte: in7Days, $gte: now }
+        };
+        break;
+      case 'revoked':
+        query = { status: 'revoked' };
+        break;
+      case 'expired':
+        query = { status: 'expired' };
+        break;
+      case 'all':
+        query = {};
+        break;
+    }
+    
+    // Récupérer les licences
+    const licenses = await License.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit);
+    
+    if (licenses.length === 0) {
+      return interaction.editReply({
+        content: '❌ Aucune licence trouvée avec ce filtre'
+      });
+    }
+    
+    // Total pour stats
+    const total = await License.countDocuments(query);
+    
+    // Construire l'embed
+    const embed = new EmbedBuilder()
+      .setColor(0x6366f1)
+      .setTitle('📋 Liste des Licences')
+      .setDescription(`**Filtre:** ${getFilterName(filter)}\n**Affichées:** ${licenses.length}/${total}`)
+      .setTimestamp();
+    
+    // Ajouter chaque licence
+    for (const license of licenses) {
+      const now = new Date();
+      const daysRemaining = Math.ceil((license.expiresAt - now) / (1000 * 60 * 60 * 24));
+      
+      let statusEmoji = '';
+      let expiryText = '';
+      
+      switch (license.status) {
+        case 'active':
+          if (daysRemaining <= 7 && daysRemaining > 0) {
+            statusEmoji = '⚠️';
+            expiryText = `Expire dans ${daysRemaining}j`;
+          } else if (daysRemaining > 0) {
+            statusEmoji = '✅';
+            expiryText = `${daysRemaining}j restants`;
+          } else {
+            statusEmoji = '⏱️';
+            expiryText = 'Expirée';
+          }
+          break;
+        case 'revoked':
+          statusEmoji = '🚫';
+          expiryText = 'Révoquée';
+          break;
+        case 'expired':
+          statusEmoji = '⏱️';
+          expiryText = 'Expirée';
+          break;
+      }
+      
+      const userName = license.discordUserId 
+        ? `<@${license.discordUserId}>` 
+        : license.username;
+      
+      const fieldValue = [
+        `**Clé:** \`${license.key}\``,
+        `**User:** ${userName}`,
+        `**Statut:** ${statusEmoji} ${expiryText}`,
+        `**Votes:** ${license.usageCount} | **Checks:** ${license.verificationCount}`,
+        `**Créée:** <t:${Math.floor(license.createdAt.getTime() / 1000)}:R>`
+      ].join('\n');
+      
+      embed.addFields({
+        name: `${license.username}`,
+        value: fieldValue,
+        inline: false
+      });
+    }
+    
+    if (total > limit) {
+      embed.setFooter({ 
+        text: `⚠️ ${total - limit} licence(s) supplémentaire(s) non affichée(s). Augmente la limite.` 
+      });
+    }
+    
+    await interaction.editReply({ embeds: [embed] });
+    
+  } catch (error) {
+    console.error('❌ [LICENSES] Erreur:', error);
+    await interaction.editReply({
+      content: '❌ Erreur lors de la récupération des licences'
+    });
+  }
+}
+
+// Helper pour le nom du filtre
+function getFilterName(filter) {
+  const names = {
+    'active': '✅ Actives uniquement',
+    'expiring': '⚠️ Expirent bientôt (7j)',
+    'revoked': '🚫 Révoquées',
+    'expired': '⏱️ Expirées',
+    'all': '📊 Toutes'
+  };
+  return names[filter] || filter;
+}
+
 
 // ========== DÉMARRAGE ==========
 
