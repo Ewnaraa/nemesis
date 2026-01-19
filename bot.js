@@ -533,12 +533,13 @@ async function handleCheckCommand(interaction) {
       { name: 'Utilisateur', value: license.username, inline: true },
       { name: '🆔 Discord User ID', value: `<@${license.discordUserId}>`, inline: true },
       { name: 'Statut', value: `${statusEmoji[license.status]} ${license.status}`, inline: true },
-      { name: 'Utilisations', value: license.usageCount.toString(), inline: true },
+      { name: '🎮 Votes effectués', value: license.usageCount.toString(), inline: true },  // ✅ MODIFIÉ
+      { name: '🔍 Vérifications', value: license.verificationCount.toString(), inline: true },  // ✅ NOUVEAU
       { name: 'IPs différentes', value: license.ipAddresses.length.toString(), inline: true },
       { name: 'Créée le', value: `<t:${Math.floor(license.createdAt.getTime() / 1000)}:F>`, inline: true }
     );
   
-  // Affichage de l'expiration avec jours restants
+  // Affichage de l'expiration
   const expirationTimestamp = Math.floor(license.expiresAt.getTime() / 1000);
   let expirationText = `<t:${expirationTimestamp}:F>`;
   
@@ -561,9 +562,17 @@ async function handleCheckCommand(interaction) {
   
   if (license.lastUsed) {
     embed.addFields({
-      name: 'Dernière utilisation',
+      name: '🎮 Dernier vote',
       value: `<t:${Math.floor(license.lastUsed.getTime() / 1000)}:R>`,
-      inline: false
+      inline: true
+    });
+  }
+  
+  if (license.lastVerified) {
+    embed.addFields({
+      name: '🔍 Dernière vérification',
+      value: `<t:${Math.floor(license.lastVerified.getTime() / 1000)}:R>`,
+      inline: true
     });
   }
   
