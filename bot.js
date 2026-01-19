@@ -128,7 +128,7 @@ const commands = [
         .setMaxValue(365)
     ),
   
-  // Commande /revoke - ✅ AMÉLIORÉE
+  // Commande /revoke
   new SlashCommandBuilder()
     .setName('revoke')
     .setDescription('[ADMIN] Révoquer une licence')
@@ -151,7 +151,7 @@ const commands = [
         .setRequired(false)
     ),
   
-  // Commande /check - ✅ AMÉLIORÉE
+  // Commande /check
   new SlashCommandBuilder()
     .setName('check')
     .setDescription('[ADMIN] Vérifier une licence')
@@ -173,7 +173,7 @@ const commands = [
     .setName('stats')
     .setDescription('[ADMIN] Statistiques des licences'),
   
-  // Commande /logs - ✅ AMÉLIORÉE
+  // Commande /logs
   new SlashCommandBuilder()
     .setName('logs')
     .setDescription('[ADMIN] Logs d\'une licence')
@@ -218,29 +218,10 @@ const commands = [
         .setRequired(true)
     ),
   
- new SlashCommandBuilder()
-  .setName('extend')
-  .setDescription('[ADMIN] Prolonger une licence')
-  .addIntegerOption(option =>  // ✅ required: TRUE EN PREMIER
-    option
-      .setName('days')
-      .setDescription('Nombre de jours à ajouter')
-      .setRequired(true)
-      .setMinValue(1)
-      .setMaxValue(365)
-  )
-  .addStringOption(option =>  // ✅ required: false APRÈS
-    option
-      .setName('key')
-      .setDescription('Clé de licence')
-      .setRequired(false)
-  )
-  .addUserOption(option =>  // ✅ required: false APRÈS
-    option
-      .setName('user')
-      .setDescription('Utilisateur Discord')
-      .setRequired(false)
-  ),
+  // Commande /extend - ✅ CORRIGÉE
+  new SlashCommandBuilder()
+    .setName('extend')
+    .setDescription('[ADMIN] Prolonger une licence')
     .addIntegerOption(option =>
       option
         .setName('days')
@@ -248,9 +229,21 @@ const commands = [
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(365)
+    )
+    .addStringOption(option =>
+      option
+        .setName('key')
+        .setDescription('Clé de licence')
+        .setRequired(false)
+    )
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(false)
     ),
   
-  // ✅ NOUVELLES commandes raccourcies
+  // Commande /userinfo
   new SlashCommandBuilder()
     .setName('userinfo')
     .setDescription('[ADMIN] Info rapide sur un utilisateur')
@@ -261,6 +254,7 @@ const commands = [
         .setRequired(true)
     ),
   
+  // Commande /userlogs
   new SlashCommandBuilder()
     .setName('userlogs')
     .setDescription('[ADMIN] Logs rapides d\'un utilisateur')
