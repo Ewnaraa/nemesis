@@ -37,7 +37,7 @@ app.get('/', (req, res) => {
 
 // Vérifier une licence
 app.post('/api/verify', async (req, res) => {
-  const { key, discordUserId, isRealUsage } = req.body;  // ✅ Recevoir isRealUsage
+  const { key, discordUserId, isRealUsage } = req.body;
   const ip = req.ip || req.connection.remoteAddress;
   
   if (!key) {
@@ -56,7 +56,7 @@ app.post('/api/verify', async (req, res) => {
   res.json(result);
 });
 
-// Obtenir info sur une licence (pour le bot Discord)
+// Obtenir info sur une licence
 app.get('/api/license/:key', async (req, res) => {
   const { key } = req.params;
   
@@ -78,7 +78,9 @@ app.get('/api/license/:key', async (req, res) => {
       expiresAt: license.expiresAt,
       daysRemaining: daysRemaining,
       lastUsed: license.lastUsed,
+      lastVerified: license.lastVerified,
       usageCount: license.usageCount,
+      verificationCount: license.verificationCount,
       ipCount: license.ipAddresses.length
     });
     
@@ -126,15 +128,21 @@ const commands = [
         .setMaxValue(365)
     ),
   
-  // Commande /revoke
+  // Commande /revoke - ✅ AMÉLIORÉE
   new SlashCommandBuilder()
     .setName('revoke')
     .setDescription('[ADMIN] Révoquer une licence')
     .addStringOption(option =>
       option
         .setName('key')
-        .setDescription('Clé de licence à révoquer')
-        .setRequired(true)
+        .setDescription('Clé de licence')
+        .setRequired(false)
+    )
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(false)
     )
     .addStringOption(option =>
       option
@@ -143,7 +151,7 @@ const commands = [
         .setRequired(false)
     ),
   
-  // Commande /check
+  // Commande /check - ✅ AMÉLIORÉE
   new SlashCommandBuilder()
     .setName('check')
     .setDescription('[ADMIN] Vérifier une licence')
@@ -151,7 +159,13 @@ const commands = [
       option
         .setName('key')
         .setDescription('Clé de licence')
-        .setRequired(true)
+        .setRequired(false)
+    )
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(false)
     ),
   
   // Commande /stats
@@ -159,7 +173,7 @@ const commands = [
     .setName('stats')
     .setDescription('[ADMIN] Statistiques des licences'),
   
-  // Commande /logs
+  // Commande /logs - ✅ AMÉLIORÉE
   new SlashCommandBuilder()
     .setName('logs')
     .setDescription('[ADMIN] Logs d\'une licence')
@@ -167,7 +181,13 @@ const commands = [
       option
         .setName('key')
         .setDescription('Clé de licence')
-        .setRequired(true)
+        .setRequired(false)
+    )
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(false)
     ),
   
   // Commande /link
@@ -198,7 +218,7 @@ const commands = [
         .setRequired(true)
     ),
   
-  // ✅ NOUVELLE Commande /extend
+  // Commande /extend - ✅ AMÉLIORÉE
   new SlashCommandBuilder()
     .setName('extend')
     .setDescription('[ADMIN] Prolonger une licence')
@@ -206,7 +226,13 @@ const commands = [
       option
         .setName('key')
         .setDescription('Clé de licence')
-        .setRequired(true)
+        .setRequired(false)
+    )
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(false)
     )
     .addIntegerOption(option =>
       option
@@ -215,6 +241,27 @@ const commands = [
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(365)
+    ),
+  
+  // ✅ NOUVELLES commandes raccourcies
+  new SlashCommandBuilder()
+    .setName('userinfo')
+    .setDescription('[ADMIN] Info rapide sur un utilisateur')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(true)
+    ),
+  
+  new SlashCommandBuilder()
+    .setName('userlogs')
+    .setDescription('[ADMIN] Logs rapides d\'un utilisateur')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(true)
     )
 ];
 
@@ -245,7 +292,7 @@ client.on('interactionCreate', async (interaction) => {
   
   // Vérifier si admin pour commandes admin
   const isAdmin = ADMIN_IDS.includes(user.id);
-  const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink', 'extend'];
+  const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink', 'extend', 'userinfo', 'userlogs'];
   
   if (adminCommands.includes(commandName) && !isAdmin) {
     return interaction.reply({
@@ -298,6 +345,14 @@ client.on('interactionCreate', async (interaction) => {
         
       case 'extend':
         await handleExtendCommand(interaction);
+        break;
+        
+      case 'userinfo':
+        await handleUserInfoCommand(interaction);
+        break;
+        
+      case 'userlogs':
+        await handleUserLogsCommand(interaction);
         break;
     }
   } catch (error) {
@@ -352,7 +407,7 @@ async function handleLicenseCommand(interaction) {
     .addFields(
       { name: 'Clé', value: `\`${license.key}\``, inline: false },
       { name: 'Statut', value: '✅ Active', inline: true },
-      { name: 'Utilisations', value: license.usageCount.toString(), inline: true },
+      { name: '🎮 Votes effectués', value: license.usageCount.toString(), inline: true },
       { name: '📅 Expire', value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:F>`, inline: true }
     );
   
@@ -366,7 +421,7 @@ async function handleLicenseCommand(interaction) {
   
   if (license.lastUsed) {
     embed.addFields({
-      name: 'Dernière utilisation',
+      name: 'Dernier vote',
       value: `<t:${Math.floor(license.lastUsed.getTime() / 1000)}:R>`,
       inline: false
     });
@@ -439,7 +494,7 @@ async function handleGenerateCommand(interaction) {
           { name: '⏰ Durée', value: `${duration} jours`, inline: true },
           { name: '📅 Expire le', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`, inline: true },
           { name: '\u200B', value: '\u200B', inline: true },
-          { name: '🆔 Discord User ID', value: `**⚠️ IMPORTANT - À COPIER :**\n\`${targetUser.id}\`\n\nCette licence est liée à votre compte Discord.\nVous **DEVEZ** entrer cet ID lors de l'activation !`, inline: false },
+          { name: '🆔 Discord User ID', value: `**⚠️ IMPORTANT - À COPIER :**\n\`${targetUser.id}\`\n\nCette licence est **automatiquement liée** à votre compte Discord.\nVous **DEVEZ** entrer cet ID lors de l'activation !`, inline: false },
           { name: '📥 Installation', value: '1. Installez l\'extension Chrome\n2. Ouvrez le popup d\'activation\n3. Entrez votre clé de licence\n4. **Entrez votre Discord User ID** (obligatoire)\n5. Profitez !', inline: false }
         )
         .setFooter({ text: '⚠️ Gardez cette clé ET votre Discord User ID secrets !' })
@@ -476,9 +531,44 @@ async function handleGenerateCommand(interaction) {
 
 async function handleRevokeCommand(interaction) {
   const key = interaction.options.getString('key');
+  const user = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason') || 'Non spécifiée';
   
-  const result = await revokeLicense(key, reason);
+  // ✅ Validation
+  if (!key && !user) {
+    return interaction.reply({
+      content: '❌ Vous devez fournir soit une clé, soit un utilisateur.',
+      ephemeral: true
+    });
+  }
+  
+  let license;
+  
+  // ✅ Chercher par user
+  if (user) {
+    license = await License.findOne({ 
+      discordUserId: user.id,
+      status: 'active'
+    });
+    
+    if (!license) {
+      return interaction.reply({
+        content: `❌ Aucune licence active trouvée pour <@${user.id}>`,
+        ephemeral: true
+      });
+    }
+  } else {
+    license = await License.findOne({ key });
+    
+    if (!license) {
+      return interaction.reply({
+        content: '❌ Licence introuvable',
+        ephemeral: true
+      });
+    }
+  }
+  
+  const result = await revokeLicense(license.key, reason);
   
   if (!result.success) {
     return interaction.reply({
@@ -491,7 +581,8 @@ async function handleRevokeCommand(interaction) {
     .setColor(0xef4444)
     .setTitle('🚫 Licence révoquée')
     .addFields(
-      { name: 'Clé', value: `\`${key}\``, inline: false },
+      { name: 'Clé', value: `\`${license.key}\``, inline: false },
+      { name: 'Utilisateur', value: `<@${license.discordUserId}>`, inline: true },
       { name: 'Raison', value: reason, inline: false }
     )
     .setTimestamp();
@@ -501,14 +592,46 @@ async function handleRevokeCommand(interaction) {
 
 async function handleCheckCommand(interaction) {
   const key = interaction.options.getString('key');
+  const user = interaction.options.getUser('user');
   
-  const license = await License.findOne({ key });
-  
-  if (!license) {
+  // ✅ Validation
+  if (!key && !user) {
     return interaction.reply({
-      content: '❌ Licence introuvable',
+      content: '❌ Vous devez fournir soit une clé, soit un utilisateur.',
       ephemeral: true
     });
+  }
+  
+  let license;
+  
+  // ✅ Chercher par user en priorité
+  if (user) {
+    license = await License.findOne({ 
+      discordUserId: user.id,
+      status: 'active'
+    });
+    
+    if (!license) {
+      // Chercher aussi dans les expirées/révoquées
+      license = await License.findOne({ discordUserId: user.id })
+        .sort({ createdAt: -1 });
+      
+      if (!license) {
+        return interaction.reply({
+          content: `❌ Aucune licence trouvée pour <@${user.id}>`,
+          ephemeral: true
+        });
+      }
+    }
+  } else {
+    license = await License.findOne({ key });
+    
+    if (!license) {
+      return interaction.reply({
+        content: '❌ Licence introuvable',
+        ephemeral: true
+      });
+    }
   }
   
   const statusEmoji = {
@@ -533,13 +656,12 @@ async function handleCheckCommand(interaction) {
       { name: 'Utilisateur', value: license.username, inline: true },
       { name: '🆔 Discord User ID', value: `<@${license.discordUserId}>`, inline: true },
       { name: 'Statut', value: `${statusEmoji[license.status]} ${license.status}`, inline: true },
-      { name: '🎮 Votes effectués', value: license.usageCount.toString(), inline: true },  // ✅ MODIFIÉ
-      { name: '🔍 Vérifications', value: license.verificationCount.toString(), inline: true },  // ✅ NOUVEAU
+      { name: '🎮 Votes effectués', value: license.usageCount.toString(), inline: true },
+      { name: '🔍 Vérifications', value: license.verificationCount.toString(), inline: true },
       { name: 'IPs différentes', value: license.ipAddresses.length.toString(), inline: true },
       { name: 'Créée le', value: `<t:${Math.floor(license.createdAt.getTime() / 1000)}:F>`, inline: true }
     );
   
-  // Affichage de l'expiration
   const expirationTimestamp = Math.floor(license.expiresAt.getTime() / 1000);
   let expirationText = `<t:${expirationTimestamp}:F>`;
   
@@ -601,8 +723,41 @@ async function handleStatsCommand(interaction) {
 
 async function handleLogsCommand(interaction) {
   const key = interaction.options.getString('key');
+  const user = interaction.options.getUser('user');
   
-  const logs = await Log.find({ licenseKey: key })
+  // ✅ Validation
+  if (!key && !user) {
+    return interaction.reply({
+      content: '❌ Vous devez fournir soit une clé, soit un utilisateur.',
+      ephemeral: true
+    });
+  }
+  
+  let license;
+  
+  // ✅ Chercher par user
+  if (user) {
+    license = await License.findOne({ discordUserId: user.id })
+      .sort({ createdAt: -1 });
+    
+    if (!license) {
+      return interaction.reply({
+        content: `❌ Aucune licence trouvée pour <@${user.id}>`,
+        ephemeral: true
+      });
+    }
+  } else {
+    license = await License.findOne({ key });
+    
+    if (!license) {
+      return interaction.reply({
+        content: '❌ Licence introuvable',
+        ephemeral: true
+      });
+    }
+  }
+  
+  const logs = await Log.find({ licenseKey: license.key })
     .sort({ timestamp: -1 })
     .limit(10);
   
@@ -623,7 +778,7 @@ async function handleLogsCommand(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0x6366f1)
     .setTitle('📋 Logs Récents')
-    .setDescription(`**Licence:** \`${key}\`\n\n${logText}`)
+    .setDescription(`**Licence:** \`${license.key}\`\n**User:** <@${license.discordUserId}>\n\n${logText}`)
     .setFooter({ text: `${logs.length} logs affichés` })
     .setTimestamp();
   
@@ -705,15 +860,39 @@ async function handleUnlinkCommand(interaction) {
 
 async function handleExtendCommand(interaction) {
   const key = interaction.options.getString('key');
+  const user = interaction.options.getUser('user');
   const days = interaction.options.getInteger('days');
   
-  const license = await License.findOne({ key });
-  
-  if (!license) {
+  // ✅ Validation
+  if (!key && !user) {
     return interaction.reply({
-      content: '❌ Licence introuvable',
+      content: '❌ Vous devez fournir soit une clé, soit un utilisateur.',
       ephemeral: true
     });
+  }
+  
+  let license;
+  
+  // ✅ Chercher par user
+  if (user) {
+    license = await License.findOne({ discordUserId: user.id })
+      .sort({ createdAt: -1 });
+    
+    if (!license) {
+      return interaction.reply({
+        content: `❌ Aucune licence trouvée pour <@${user.id}>`,
+        ephemeral: true
+      });
+    }
+  } else {
+    license = await License.findOne({ key });
+    
+    if (!license) {
+      return interaction.reply({
+        content: '❌ Licence introuvable',
+        ephemeral: true
+      });
+    }
   }
   
   const oldExpiry = new Date(license.expiresAt);
@@ -721,7 +900,6 @@ async function handleExtendCommand(interaction) {
   
   license.expiresAt = newExpiry;
   
-  // Si la licence était expirée, la réactiver
   if (license.status === 'expired') {
     license.status = 'active';
   }
@@ -745,7 +923,7 @@ async function handleExtendCommand(interaction) {
   
   // Notifier l'utilisateur
   try {
-    const user = await client.users.fetch(license.discordUserId);
+    const discordUser = await client.users.fetch(license.discordUserId);
     const dmEmbed = new EmbedBuilder()
       .setColor(0x10b981)
       .setTitle('🎉 Licence Prolongée !')
@@ -755,10 +933,148 @@ async function handleExtendCommand(interaction) {
       )
       .setTimestamp();
     
-    await user.send({ embeds: [dmEmbed] });
+    await discordUser.send({ embeds: [dmEmbed] });
   } catch (error) {
     console.error('Impossible d\'envoyer DM:', error);
   }
+}
+
+// ✅ NOUVELLES commandes raccourcies
+async function handleUserInfoCommand(interaction) {
+  const user = interaction.options.getUser('user');
+  
+  const license = await License.findOne({ 
+    discordUserId: user.id,
+    status: 'active'
+  });
+  
+  if (!license) {
+    // Chercher dans toutes les licences
+    const anyLicense = await License.findOne({ discordUserId: user.id })
+      .sort({ createdAt: -1 });
+    
+    if (!anyLicense) {
+      return interaction.reply({
+        content: `❌ <@${user.id}> n'a pas de licence`,
+        ephemeral: true
+      });
+    }
+    
+    // Utiliser cette licence même si expirée/révoquée
+    return handleCheckWithLicense(interaction, anyLicense);
+  }
+  
+  return handleCheckWithLicense(interaction, license);
+}
+
+async function handleUserLogsCommand(interaction) {
+  const user = interaction.options.getUser('user');
+  
+  const license = await License.findOne({ discordUserId: user.id })
+    .sort({ createdAt: -1 });
+  
+  if (!license) {
+    return interaction.reply({
+      content: `❌ <@${user.id}> n'a pas de licence`,
+      ephemeral: true
+    });
+  }
+  
+  const logs = await Log.find({ licenseKey: license.key })
+    .sort({ timestamp: -1 })
+    .limit(10);
+  
+  if (logs.length === 0) {
+    return interaction.reply({
+      content: '❌ Aucun log trouvé pour cette licence',
+      ephemeral: true
+    });
+  }
+  
+  const logText = logs.map(log => {
+    const emoji = log.success ? '✅' : '❌';
+    const time = `<t:${Math.floor(log.timestamp.getTime() / 1000)}:R>`;
+    const discord = log.discordUserId ? ` (Discord: ${log.discordUserId})` : '';
+    return `${emoji} ${log.action} - ${time} - ${log.ip || 'N/A'}${discord}`;
+  }).join('\n');
+  
+  const embed = new EmbedBuilder()
+    .setColor(0x6366f1)
+    .setTitle('📋 Logs Récents')
+    .setDescription(`**User:** <@${user.id}>\n**Licence:** \`${license.key}\`\n\n${logText}`)
+    .setFooter({ text: `${logs.length} logs affichés` })
+    .setTimestamp();
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+// Fonction helper pour réutiliser le code de check
+async function handleCheckWithLicense(interaction, license) {
+  const statusEmoji = {
+    'active': '✅',
+    'revoked': '🚫',
+    'expired': '⏰'
+  };
+  
+  const now = new Date();
+  const daysRemaining = Math.ceil((license.expiresAt - now) / (1000 * 60 * 60 * 24));
+  const isExpiringSoon = daysRemaining <= 7 && daysRemaining > 0;
+  
+  const embed = new EmbedBuilder()
+    .setColor(
+      license.status === 'expired' ? 0xef4444 : 
+      isExpiringSoon ? 0xf59e0b : 
+      0x10b981
+    )
+    .setTitle('🔍 Informations Licence')
+    .addFields(
+      { name: 'Clé', value: `\`${license.key}\``, inline: false },
+      { name: 'Utilisateur', value: license.username, inline: true },
+      { name: '🆔 Discord User ID', value: `<@${license.discordUserId}>`, inline: true },
+      { name: 'Statut', value: `${statusEmoji[license.status]} ${license.status}`, inline: true },
+      { name: '🎮 Votes effectués', value: license.usageCount.toString(), inline: true },
+      { name: '🔍 Vérifications', value: license.verificationCount.toString(), inline: true },
+      { name: 'IPs différentes', value: license.ipAddresses.length.toString(), inline: true },
+      { name: 'Créée le', value: `<t:${Math.floor(license.createdAt.getTime() / 1000)}:F>`, inline: true }
+    );
+  
+  const expirationTimestamp = Math.floor(license.expiresAt.getTime() / 1000);
+  let expirationText = `<t:${expirationTimestamp}:F>`;
+  
+  if (license.status === 'active') {
+    if (daysRemaining > 0) {
+      expirationText += `\n(${daysRemaining} jour${daysRemaining > 1 ? 's' : ''} restant${daysRemaining > 1 ? 's' : ''})`;
+      if (isExpiringSoon) {
+        expirationText += ' ⚠️';
+      }
+    } else {
+      expirationText += '\n(Expirée)';
+    }
+  }
+  
+  embed.addFields({
+    name: '📅 Expire',
+    value: expirationText,
+    inline: true
+  });
+  
+  if (license.lastUsed) {
+    embed.addFields({
+      name: '🎮 Dernier vote',
+      value: `<t:${Math.floor(license.lastUsed.getTime() / 1000)}:R>`,
+      inline: true
+    });
+  }
+  
+  if (license.lastVerified) {
+    embed.addFields({
+      name: '🔍 Dernière vérification',
+      value: `<t:${Math.floor(license.lastVerified.getTime() / 1000)}:R>`,
+      inline: true
+    });
+  }
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 // ========== DÉMARRAGE ==========
