@@ -372,7 +372,7 @@ const commands = [
         .setName('confirm')
         .setDescription('Confirmer la suppression (True = oui)')
         .setRequired(true)
-    )
+    ),
   // Commande /referral
   new SlashCommandBuilder()
     .setName('referral')
