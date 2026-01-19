@@ -21,7 +21,36 @@ const client = new Client({
 
 // ========== EXPRESS API ==========
 const app = express();
-app.use(cors());
+
+// ✅ NOUVEAU CODE - CORS avec Chrome Extension
+app.use(cors({
+  origin: function (origin, callback) {
+    // Autoriser les requêtes sans origine (comme Postman)
+    if (!origin) return callback(null, true);
+    
+    // Autoriser toutes les extensions Chrome
+    if (origin.startsWith('chrome-extension://')) {
+      return callback(null, true);
+    }
+    
+    // Autoriser localhost pour dev
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Autoriser ton domaine Netlify si tu en as un
+    if (origin.includes('netlify.app')) {
+      return callback(null, true);
+    }
+    
+    // Bloquer les autres
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 // ========== API ROUTES ==========
