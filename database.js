@@ -15,9 +15,9 @@ const licenseSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  discordUserId: {  // ✅ OBLIGATOIRE maintenant
+  discordUserId: {  // ✅ OBLIGATOIRE
     type: String,
-    required: true,  // ✅ CHANGÉ : obligatoire
+    required: true,
     index: true
   },
   username: {
@@ -38,9 +38,9 @@ const licenseSchema = new mongoose.Schema({
     default: Date.now
   },
   
-  expiresAt: {  // ✅ Maintenant avec 30 jours par défaut
+  expiresAt: {  // ✅ OBLIGATOIRE
     type: Date,
-    required: true  // ✅ CHANGÉ : obligatoire
+    required: true
   },
   
   lastUsed: {
@@ -129,7 +129,7 @@ const logSchema = new mongoose.Schema({
   
   ip: String,
   userAgent: String,
-  discordUserId: String,  // ✅ NOUVEAU
+  discordUserId: String,
   
   success: {
     type: Boolean,
@@ -187,15 +187,27 @@ function generateLicenseKey() {
 
 // Créer une nouvelle licence
 async function createLicense(userId, username, options = {}) {
+  // ✅ VÉRIFICATION : Discord User ID obligatoire
+  if (!options.discordUserId) {
+    throw new Error('Discord User ID est obligatoire');
+  }
+  
   const key = generateLicenseKey();
+  
+  // ✅ DURÉE PAR DÉFAUT : 30 jours
+  const defaultDuration = 30; // jours
+  const duration = options.duration !== undefined ? options.duration : defaultDuration;
+  
+  // ✅ Calculer la date d'expiration (toujours définie)
+  const expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
   
   const license = new License({
     key,
     userId,
     username,
     email: options.email,
-    discordUserId: options.discordUserId || null,  // ✅ NOUVEAU
-    expiresAt: options.expiresAt,
+    discordUserId: options.discordUserId,  // ✅ OBLIGATOIRE
+    expiresAt: expiresAt,  // ✅ TOUJOURS défini
     metadata: {
       stripePaymentId: options.stripePaymentId,
       stripeCustomerId: options.stripeCustomerId,
@@ -206,14 +218,30 @@ async function createLicense(userId, username, options = {}) {
   
   await license.save();
   
-  console.log(`✅ [LICENSE] Créée: ${key} pour ${username}`);
+  console.log(`✅ [LICENSE] Créée: ${key} pour ${username} (Discord: ${options.discordUserId}) - Expire: ${expiresAt.toLocaleDateString('fr-FR')}`);
   
   return license;
 }
 
 // Vérifier une licence
-async function verifyLicense(key, ipAddress, discordUserId = null) {
+async function verifyLicense(key, ipAddress, discordUserId) {
   try {
+    // ✅ VÉRIFICATION : Discord User ID obligatoire
+    if (!discordUserId) {
+      await Log.create({
+        licenseKey: key,
+        action: 'verify',
+        ip: ipAddress,
+        discordUserId: null,
+        success: false,
+        error: 'Discord User ID required'
+      });
+      return { 
+        valid: false, 
+        error: 'Discord User ID requis pour utiliser cette licence' 
+      };
+    }
+    
     const license = await License.findOne({ key });
     
     if (!license) {
@@ -237,37 +265,47 @@ async function verifyLicense(key, ipAddress, discordUserId = null) {
         success: false,
         error: `Status: ${license.status}`
       });
+      
+      // ✅ Message plus explicite pour les licences expirées
+      if (license.status === 'expired') {
+        const expiredDate = new Date(license.expiresAt).toLocaleDateString('fr-FR');
+        return { 
+          valid: false, 
+          error: `Licence expirée le ${expiredDate}` 
+        };
+      }
+      
       return { 
         valid: false, 
         error: license.status === 'revoked' ? 'Licence révoquée' : 'Licence expirée' 
       };
     }
     
-    // ✅ NOUVEAU : Vérification du Discord User ID
-    if (discordUserId) {
-      if (!license.discordUserId) {
-        // Première utilisation : lier l'ID Discord à la licence
-        license.discordUserId = discordUserId;
-        console.log(`✅ [LICENSE] Licence ${key} liée au Discord User ID ${discordUserId}`);
-      } else if (license.discordUserId !== discordUserId) {
-        // L'ID Discord ne correspond pas
-        await Log.create({
-          licenseKey: key,
-          action: 'verify',
-          ip: ipAddress,
-          discordUserId: discordUserId,
-          success: false,
-          error: `Discord User ID mismatch: expected ${license.discordUserId}, got ${discordUserId}`
-        });
-        return { 
-          valid: false, 
-          error: 'Cette licence est liée à un autre compte Discord' 
-        };
-      }
+    // ✅ VÉRIFICATION STRICTE : Le Discord User ID doit correspondre EXACTEMENT
+    if (license.discordUserId !== discordUserId) {
+      await Log.create({
+        licenseKey: key,
+        action: 'verify',
+        ip: ipAddress,
+        discordUserId: discordUserId,
+        success: false,
+        error: `Discord User ID mismatch: expected ${license.discordUserId}, got ${discordUserId}`
+      });
+      return { 
+        valid: false, 
+        error: 'Cette licence est liée à un autre compte Discord' 
+      };
     }
     
     // Enregistrer l'utilisation
-    await license.recordUsage(ipAddress, discordUserId);
+    try {
+      await license.recordUsage(ipAddress, discordUserId);
+    } catch (error) {
+      return { 
+        valid: false, 
+        error: 'Erreur lors de l\'enregistrement de l\'utilisation' 
+      };
+    }
     
     await Log.create({
       licenseKey: key,
@@ -277,6 +315,9 @@ async function verifyLicense(key, ipAddress, discordUserId = null) {
       success: true
     });
     
+    // ✅ Calculer les jours restants
+    const daysRemaining = Math.ceil((license.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+    
     return {
       valid: true,
       license: {
@@ -284,7 +325,8 @@ async function verifyLicense(key, ipAddress, discordUserId = null) {
         username: license.username,
         discordUserId: license.discordUserId,
         expiresAt: license.expiresAt,
-        lastUsed: license.lastUsed
+        lastUsed: license.lastUsed,
+        daysRemaining: daysRemaining  // ✅ NOUVEAU
       }
     };
     
@@ -329,7 +371,15 @@ async function getStats() {
   const active = await License.countDocuments({ status: 'active' });
   const revoked = await License.countDocuments({ status: 'revoked' });
   const expired = await License.countDocuments({ status: 'expired' });
-  const linked = await License.countDocuments({ discordUserId: { $ne: null } });  // ✅ NOUVEAU
+  const linked = await License.countDocuments({ discordUserId: { $ne: null } });
+  
+  // ✅ NOUVEAU : Stats sur les expirations à venir
+  const now = new Date();
+  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const expiringSoon = await License.countDocuments({ 
+    status: 'active',
+    expiresAt: { $lte: in7Days, $gte: now }
+  });
   
   const recentLogs = await Log.find()
     .sort({ timestamp: -1 })
@@ -340,7 +390,8 @@ async function getStats() {
     active,
     revoked,
     expired,
-    linked,  // ✅ NOUVEAU
+    linked,
+    expiringSoon,  // ✅ NOUVEAU
     recentActivity: recentLogs
   };
 }
