@@ -37,7 +37,7 @@ app.get('/', (req, res) => {
 
 // Vérifier une licence
 app.post('/api/verify', async (req, res) => {
-  const { key, discordUserId } = req.body;
+  const { key, discordUserId, isRealUsage } = req.body;  // ✅ Recevoir isRealUsage
   const ip = req.ip || req.connection.remoteAddress;
   
   if (!key) {
@@ -48,9 +48,10 @@ app.post('/api/verify', async (req, res) => {
     return res.status(400).json({ valid: false, error: 'Discord User ID requis' });
   }
   
-  console.log(`[API] Vérification licence: ${key} depuis ${ip} (Discord: ${discordUserId})`);
+  const usageType = isRealUsage ? '[USAGE]' : '[CHECK]';
+  console.log(`[API] ${usageType} Licence: ${key} depuis ${ip} (Discord: ${discordUserId})`);
   
-  const result = await verifyLicense(key, ip, discordUserId);
+  const result = await verifyLicense(key, ip, discordUserId, isRealUsage || false);
   
   res.json(result);
 });
