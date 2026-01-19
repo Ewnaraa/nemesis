@@ -257,7 +257,7 @@ async function createLicense(userId, username, options = {}) {
 }
 
 // Vérifier une licence
-async function verifyLicense(key, ipAddress, discordUserId) {
+async function verifyLicense(key, ipAddress, discordUserId, isRealUsage = false) {
   try {
     // ✅ VÉRIFICATION : Discord User ID obligatoire
     if (!discordUserId) {
@@ -299,7 +299,6 @@ async function verifyLicense(key, ipAddress, discordUserId) {
         error: `Status: ${license.status}`
       });
       
-      // ✅ Message plus explicite pour les licences expirées
       if (license.status === 'expired') {
         const expiredDate = new Date(license.expiresAt).toLocaleDateString('fr-FR');
         return { 
@@ -330,25 +329,32 @@ async function verifyLicense(key, ipAddress, discordUserId) {
       };
     }
     
-    // Enregistrer l'utilisation
+    // ✅ NOUVEAU : Différencier vérification simple et utilisation réelle
     try {
-      await license.recordUsage(ipAddress, discordUserId);
+      if (isRealUsage) {
+        // Utilisation réelle (vote réussi)
+        await license.recordUsage(ipAddress, discordUserId);
+        console.log(`✅ [LICENSE] Usage enregistré: ${key}`);
+      } else {
+        // Simple vérification (startup, check périodique)
+        await license.recordVerification(ipAddress, discordUserId);
+        console.log(`🔍 [LICENSE] Vérification: ${key}`);
+      }
     } catch (error) {
       return { 
         valid: false, 
-        error: 'Erreur lors de l\'enregistrement de l\'utilisation' 
+        error: 'Erreur lors de l\'enregistrement' 
       };
     }
     
     await Log.create({
       licenseKey: key,
-      action: 'verify',
+      action: isRealUsage ? 'usage' : 'verify',
       ip: ipAddress,
       discordUserId: discordUserId,
       success: true
     });
     
-    // ✅ Calculer les jours restants
     const daysRemaining = Math.ceil((license.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
     
     return {
@@ -359,7 +365,10 @@ async function verifyLicense(key, ipAddress, discordUserId) {
         discordUserId: license.discordUserId,
         expiresAt: license.expiresAt,
         lastUsed: license.lastUsed,
-        daysRemaining: daysRemaining  // ✅ NOUVEAU
+        lastVerified: license.lastVerified,
+        daysRemaining: daysRemaining,
+        usageCount: license.usageCount,  // ✅ Nombre de votes
+        verificationCount: license.verificationCount  // ✅ Nombre de vérifications
       }
     };
     
