@@ -252,7 +252,7 @@ async function handleBuyCommand(interaction) {
       { name: '🎮 Serveurs supportés', value: '• Karnak Retro\n• Hyperion\n• Autres bientôt...', inline: false },
       { name: '🛒 Comment acheter ?', value: `Consultez <#${CHANNELS.TARIFS}> pour les prix\nContactez un admin pour le paiement`, inline: false }
     )
-    .setFooter({ text: 'Nemesis Vote v2.4.0 • Licence à vie' })
+    .setFooter({ text: 'Nemesis Vote v2.4.0 • Licence limitée' })
     .setTimestamp();
   
   await interaction.reply({ embeds: [embed], ephemeral: true });
