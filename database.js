@@ -15,6 +15,11 @@ const licenseSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  discordUserId: {  // ✅ NOUVEAU : Pour lier à un compte Discord spécifique
+    type: String,
+    default: null,
+    index: true
+  },
   username: {
     type: String,
     required: true
@@ -65,6 +70,7 @@ const licenseSchema = new mongoose.Schema({
 // Index pour recherche rapide
 licenseSchema.index({ key: 1, status: 1 });
 licenseSchema.index({ userId: 1, status: 1 });
+licenseSchema.index({ discordUserId: 1, status: 1 });
 
 // Méthode pour vérifier si la licence est valide
 licenseSchema.methods.isValid = function() {
@@ -80,9 +86,15 @@ licenseSchema.methods.isValid = function() {
 };
 
 // Méthode pour enregistrer une utilisation
-licenseSchema.methods.recordUsage = async function(ipAddress) {
+licenseSchema.methods.recordUsage = async function(ipAddress, discordUserId = null) {
   this.lastUsed = new Date();
   this.usageCount += 1;
+  
+  // ✅ Lier le Discord User ID à la première utilisation
+  if (discordUserId && !this.discordUserId) {
+    this.discordUserId = discordUserId;
+    console.log(`✅ [LICENSE] Licence ${this.key} liée au Discord User ID ${discordUserId}`);
+  }
   
   // Enregistrer l'IP
   const existingIp = this.ipAddresses.find(item => item.ip === ipAddress);
@@ -117,6 +129,7 @@ const logSchema = new mongoose.Schema({
   
   ip: String,
   userAgent: String,
+  discordUserId: String,  // ✅ NOUVEAU
   
   success: {
     type: Boolean,
@@ -181,6 +194,7 @@ async function createLicense(userId, username, options = {}) {
     userId,
     username,
     email: options.email,
+    discordUserId: options.discordUserId || null,  // ✅ NOUVEAU
     expiresAt: options.expiresAt,
     metadata: {
       stripePaymentId: options.stripePaymentId,
@@ -198,7 +212,7 @@ async function createLicense(userId, username, options = {}) {
 }
 
 // Vérifier une licence
-async function verifyLicense(key, ipAddress) {
+async function verifyLicense(key, ipAddress, discordUserId = null) {
   try {
     const license = await License.findOne({ key });
     
@@ -207,6 +221,7 @@ async function verifyLicense(key, ipAddress) {
         licenseKey: key,
         action: 'verify',
         ip: ipAddress,
+        discordUserId: discordUserId,
         success: false,
         error: 'License not found'
       });
@@ -218,6 +233,7 @@ async function verifyLicense(key, ipAddress) {
         licenseKey: key,
         action: 'verify',
         ip: ipAddress,
+        discordUserId: discordUserId,
         success: false,
         error: `Status: ${license.status}`
       });
@@ -227,13 +243,37 @@ async function verifyLicense(key, ipAddress) {
       };
     }
     
+    // ✅ NOUVEAU : Vérification du Discord User ID
+    if (discordUserId) {
+      if (!license.discordUserId) {
+        // Première utilisation : lier l'ID Discord à la licence
+        license.discordUserId = discordUserId;
+        console.log(`✅ [LICENSE] Licence ${key} liée au Discord User ID ${discordUserId}`);
+      } else if (license.discordUserId !== discordUserId) {
+        // L'ID Discord ne correspond pas
+        await Log.create({
+          licenseKey: key,
+          action: 'verify',
+          ip: ipAddress,
+          discordUserId: discordUserId,
+          success: false,
+          error: `Discord User ID mismatch: expected ${license.discordUserId}, got ${discordUserId}`
+        });
+        return { 
+          valid: false, 
+          error: 'Cette licence est liée à un autre compte Discord' 
+        };
+      }
+    }
+    
     // Enregistrer l'utilisation
-    await license.recordUsage(ipAddress);
+    await license.recordUsage(ipAddress, discordUserId);
     
     await Log.create({
       licenseKey: key,
       action: 'verify',
       ip: ipAddress,
+      discordUserId: discordUserId,
       success: true
     });
     
@@ -242,6 +282,7 @@ async function verifyLicense(key, ipAddress) {
       license: {
         key: license.key,
         username: license.username,
+        discordUserId: license.discordUserId,
         expiresAt: license.expiresAt,
         lastUsed: license.lastUsed
       }
@@ -288,6 +329,7 @@ async function getStats() {
   const active = await License.countDocuments({ status: 'active' });
   const revoked = await License.countDocuments({ status: 'revoked' });
   const expired = await License.countDocuments({ status: 'expired' });
+  const linked = await License.countDocuments({ discordUserId: { $ne: null } });  // ✅ NOUVEAU
   
   const recentLogs = await Log.find()
     .sort({ timestamp: -1 })
@@ -298,6 +340,7 @@ async function getStats() {
     active,
     revoked,
     expired,
+    linked,  // ✅ NOUVEAU
     recentActivity: recentLogs
   };
 }
