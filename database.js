@@ -15,9 +15,9 @@ const licenseSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  discordUserId: {  // ✅ NOUVEAU : Pour lier à un compte Discord spécifique
+  discordUserId: {  // ✅ OBLIGATOIRE maintenant
     type: String,
-    default: null,
+    required: true,  // ✅ CHANGÉ : obligatoire
     index: true
   },
   username: {
@@ -38,9 +38,9 @@ const licenseSchema = new mongoose.Schema({
     default: Date.now
   },
   
-  expiresAt: {
+  expiresAt: {  // ✅ Maintenant avec 30 jours par défaut
     type: Date,
-    default: null // null = illimité
+    required: true  // ✅ CHANGÉ : obligatoire
   },
   
   lastUsed: {
@@ -76,6 +76,7 @@ licenseSchema.index({ discordUserId: 1, status: 1 });
 licenseSchema.methods.isValid = function() {
   if (this.status !== 'active') return false;
   
+  // ✅ Vérification stricte de l'expiration
   if (this.expiresAt && this.expiresAt < new Date()) {
     this.status = 'expired';
     this.save();
@@ -86,14 +87,13 @@ licenseSchema.methods.isValid = function() {
 };
 
 // Méthode pour enregistrer une utilisation
-licenseSchema.methods.recordUsage = async function(ipAddress, discordUserId = null) {
+licenseSchema.methods.recordUsage = async function(ipAddress, discordUserId) {
   this.lastUsed = new Date();
   this.usageCount += 1;
   
-  // ✅ Lier le Discord User ID à la première utilisation
-  if (discordUserId && !this.discordUserId) {
-    this.discordUserId = discordUserId;
-    console.log(`✅ [LICENSE] Licence ${this.key} liée au Discord User ID ${discordUserId}`);
+  // ✅ VÉRIFICATION STRICTE : Le Discord User ID doit correspondre
+  if (this.discordUserId !== discordUserId) {
+    throw new Error('Discord User ID mismatch');
   }
   
   // Enregistrer l'IP
