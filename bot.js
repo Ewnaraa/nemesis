@@ -37,16 +37,20 @@ app.get('/', (req, res) => {
 
 // Vérifier une licence
 app.post('/api/verify', async (req, res) => {
-  const { key, discordUserId } = req.body;  // ✅ Recevoir discordUserId
+  const { key, discordUserId } = req.body;
   const ip = req.ip || req.connection.remoteAddress;
   
   if (!key) {
     return res.status(400).json({ valid: false, error: 'Clé requise' });
   }
   
-  console.log(`[API] Vérification licence: ${key} depuis ${ip}${discordUserId ? ` (Discord: ${discordUserId})` : ''}`);
+  if (!discordUserId) {
+    return res.status(400).json({ valid: false, error: 'Discord User ID requis' });
+  }
   
-  const result = await verifyLicense(key, ip, discordUserId);  // ✅ Passer discordUserId
+  console.log(`[API] Vérification licence: ${key} depuis ${ip} (Discord: ${discordUserId})`);
+  
+  const result = await verifyLicense(key, ip, discordUserId);
   
   res.json(result);
 });
@@ -62,13 +66,16 @@ app.get('/api/license/:key', async (req, res) => {
       return res.status(404).json({ error: 'Licence introuvable' });
     }
     
+    const daysRemaining = Math.ceil((license.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+    
     res.json({
       key: license.key,
       username: license.username,
-      discordUserId: license.discordUserId,  // ✅ NOUVEAU
+      discordUserId: license.discordUserId,
       status: license.status,
       createdAt: license.createdAt,
       expiresAt: license.expiresAt,
+      daysRemaining: daysRemaining,
       lastUsed: license.lastUsed,
       usageCount: license.usageCount,
       ipCount: license.ipAddresses.length
@@ -112,8 +119,10 @@ const commands = [
     .addIntegerOption(option =>
       option
         .setName('duration')
-        .setDescription('Durée en jours (0 = illimité)')
+        .setDescription('Durée en jours (défaut: 30 jours)')
         .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(365)
     ),
   
   // Commande /revoke
@@ -160,7 +169,7 @@ const commands = [
         .setRequired(true)
     ),
   
-  // ✅ NOUVELLE Commande /link
+  // Commande /link
   new SlashCommandBuilder()
     .setName('link')
     .setDescription('[ADMIN] Lier une licence à un Discord User ID')
@@ -177,7 +186,7 @@ const commands = [
         .setRequired(true)
     ),
   
-  // ✅ NOUVELLE Commande /unlink
+  // Commande /unlink
   new SlashCommandBuilder()
     .setName('unlink')
     .setDescription('[ADMIN] Délier une licence d\'un Discord User ID')
@@ -186,6 +195,25 @@ const commands = [
         .setName('key')
         .setDescription('Clé de licence')
         .setRequired(true)
+    ),
+  
+  // ✅ NOUVELLE Commande /extend
+  new SlashCommandBuilder()
+    .setName('extend')
+    .setDescription('[ADMIN] Prolonger une licence')
+    .addStringOption(option =>
+      option
+        .setName('key')
+        .setDescription('Clé de licence')
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('days')
+        .setDescription('Nombre de jours à ajouter')
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(365)
     )
 ];
 
@@ -216,7 +244,7 @@ client.on('interactionCreate', async (interaction) => {
   
   // Vérifier si admin pour commandes admin
   const isAdmin = ADMIN_IDS.includes(user.id);
-  const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink'];
+  const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink', 'extend'];
   
   if (adminCommands.includes(commandName) && !isAdmin) {
     return interaction.reply({
@@ -266,6 +294,10 @@ client.on('interactionCreate', async (interaction) => {
       case 'unlink':
         await handleUnlinkCommand(interaction);
         break;
+        
+      case 'extend':
+        await handleExtendCommand(interaction);
+        break;
     }
   } catch (error) {
     console.error(`❌ [COMMAND] Erreur ${commandName}:`, error);
@@ -284,20 +316,24 @@ async function handleBuyCommand(interaction) {
     .setTitle('💰 Acheter Auto Vote Bot')
     .setDescription('**Extension Chrome pour voter automatiquement sur vos serveurs Dofus !**')
     .addFields(
-      { name: '💎 Prix', value: `${process.env.LICENSE_PRICE / 100}€`, inline: true },
-      { name: '⏰ Durée', value: process.env.LICENSE_DURATION === '0' ? 'Illimité' : `${process.env.LICENSE_DURATION} jours`, inline: true },
+      { name: '💎 Prix', value: `${(process.env.LICENSE_PRICE || 500) / 100}€`, inline: true },
+      { name: '⏰ Durée', value: '30 jours', inline: true },
       { name: '\u200B', value: '\u200B', inline: true },
       { name: '✨ Fonctionnalités', value: '• Vote automatique multi-serveurs\n• Synchronisation cooldown\n• Notifications Discord\n• Stats détaillées\n• Support 24/7', inline: false },
-      { name: '🛒 Comment acheter ?', value: '1. Contactez un administrateur\n2. Effectuez le paiement\n3. Recevez votre licence instantanément', inline: false }
+      { name: '⚠️ Important', value: '• Licence valable 30 jours\n• Liée à votre compte Discord\n• Discord User ID obligatoire', inline: false },
+      { name: '🛒 Comment acheter ?', value: '1. Contactez un administrateur\n2. Effectuez le paiement\n3. Recevez votre licence instantanément\n4. Activez avec votre Discord User ID', inline: false }
     )
-    .setFooter({ text: 'Auto Vote Bot • Licence à vie' })
+    .setFooter({ text: 'Auto Vote Bot • Licence 30 jours' })
     .setTimestamp();
   
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 async function handleLicenseCommand(interaction) {
-  const license = await License.findOne({ userId: interaction.user.id, status: 'active' });
+  const license = await License.findOne({ 
+    discordUserId: interaction.user.id, 
+    status: 'active' 
+  });
   
   if (!license) {
     return interaction.reply({
@@ -306,30 +342,37 @@ async function handleLicenseCommand(interaction) {
     });
   }
   
+  const daysRemaining = Math.ceil((license.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+  const isExpiringSoon = daysRemaining <= 7;
+  
   const embed = new EmbedBuilder()
-    .setColor(0x10b981)
+    .setColor(isExpiringSoon ? 0xf59e0b : 0x10b981)
     .setTitle('🔑 Votre Licence')
     .addFields(
       { name: 'Clé', value: `\`${license.key}\``, inline: false },
       { name: 'Statut', value: '✅ Active', inline: true },
       { name: 'Utilisations', value: license.usageCount.toString(), inline: true },
-      { name: 'Expire', value: license.expiresAt ? new Date(license.expiresAt).toLocaleDateString('fr-FR') : 'Jamais', inline: true }
+      { name: '📅 Expire', value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:F>`, inline: true }
     );
   
-  if (license.discordUserId) {
+  if (daysRemaining > 0) {
     embed.addFields({
-      name: '🆔 Discord User ID',
-      value: `Liée à <@${license.discordUserId}>`,
-      inline: false
+      name: '⏰ Temps restant',
+      value: `${daysRemaining} jour${daysRemaining > 1 ? 's' : ''}${isExpiringSoon ? ' ⚠️' : ''}`,
+      inline: true
     });
   }
   
   if (license.lastUsed) {
     embed.addFields({
       name: 'Dernière utilisation',
-      value: new Date(license.lastUsed).toLocaleString('fr-FR'),
+      value: `<t:${Math.floor(license.lastUsed.getTime() / 1000)}:R>`,
       inline: false
     });
+  }
+  
+  if (isExpiringSoon) {
+    embed.setDescription('⚠️ Votre licence expire bientôt ! Contactez un admin pour renouveler.');
   }
   
   embed.setFooter({ text: 'Gardez votre clé secrète !' });
@@ -347,8 +390,9 @@ async function handleHelpCommand(interaction) {
       { name: '/buy', value: 'Acheter une licence', inline: true },
       { name: '/license', value: 'Voir votre licence', inline: true },
       { name: '/help', value: 'Afficher cette aide', inline: true },
-      { name: '📥 Installation', value: '1. Achetez une licence avec `/buy`\n2. Téléchargez l\'extension\n3. Entrez votre clé de licence\n4. (Optionnel) Entrez votre Discord User ID\n5. Profitez !', inline: false },
-      { name: '🔗 Lier votre Discord', value: 'Vous pouvez lier votre licence à votre compte Discord pour plus de sécurité.\nVotre User ID : `' + interaction.user.id + '`', inline: false },
+      { name: '📥 Installation', value: '1. Achetez une licence avec `/buy`\n2. Téléchargez l\'extension\n3. Entrez votre clé de licence\n4. **Entrez votre Discord User ID (obligatoire)**\n5. Profitez !', inline: false },
+      { name: '🆔 Votre Discord User ID', value: `\`${interaction.user.id}\`\n\n⚠️ Vous devez entrer cet ID lors de l'activation de votre licence !`, inline: false },
+      { name: '🔗 Comment trouver votre ID ?', value: '[Guide Discord](https://support.discord.com/hc/fr/articles/206346498)', inline: false },
       { name: '🆘 Support', value: 'Besoin d\'aide ? Contactez un administrateur', inline: false }
     )
     .setFooter({ text: 'Auto Vote Bot' })
@@ -359,60 +403,74 @@ async function handleHelpCommand(interaction) {
 
 async function handleGenerateCommand(interaction) {
   const targetUser = interaction.options.getUser('user');
-  const duration = interaction.options.getInteger('duration') || 0;
+  const duration = interaction.options.getInteger('duration') || 30;
   
-  const expiresAt = duration > 0 ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000) : null;
+  const expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
   
-  const license = await createLicense(
-    targetUser.id, 
-    targetUser.username, 
-    { 
-      expiresAt,
-      discordUserId: targetUser.id  // ✅ Lier automatiquement
-    }
-  );
-  
-  // Donner le rôle Premium
   try {
-    const member = await interaction.guild.members.fetch(targetUser.id);
-    const role = interaction.guild.roles.cache.find(r => r.name === PREMIUM_ROLE_NAME);
-    if (role) {
-      await member.roles.add(role);
-    }
-  } catch (error) {
-    console.error('Erreur ajout rôle:', error);
-  }
-  
-  // Envoyer DM à l'utilisateur
-  try {
-    const dmEmbed = new EmbedBuilder()
-      .setColor(0x10b981)
-      .setTitle('🎉 Licence générée !')
-      .setDescription(`**Votre licence Auto Vote Bot :**\n\n\`${license.key}\``)
-      .addFields(
-        { name: '📥 Télécharger', value: '[Lien Chrome Web Store](https://chrome.google.com/webstore/...)', inline: false },
-        { name: '🆔 Discord User ID', value: `Cette licence est automatiquement liée à votre compte Discord : \`${targetUser.id}\``, inline: false },
-        { name: '📖 Installation', value: '1. Installez l\'extension\n2. Ouvrez le popup\n3. Entrez votre clé\n4. (Optionnel) Entrez votre Discord User ID pour plus de sécurité\n5. Profitez !', inline: false }
-      )
-      .setFooter({ text: 'Gardez cette clé secrète !' });
+    const license = await createLicense(
+      targetUser.id, 
+      targetUser.username, 
+      { 
+        duration: duration,
+        discordUserId: targetUser.id
+      }
+    );
     
-    await targetUser.send({ embeds: [dmEmbed] });
+    // Donner le rôle Premium
+    try {
+      const member = await interaction.guild.members.fetch(targetUser.id);
+      const role = interaction.guild.roles.cache.find(r => r.name === PREMIUM_ROLE_NAME);
+      if (role) {
+        await member.roles.add(role);
+      }
+    } catch (error) {
+      console.error('Erreur ajout rôle:', error);
+    }
+    
+    // Envoyer DM à l'utilisateur
+    try {
+      const dmEmbed = new EmbedBuilder()
+        .setColor(0x10b981)
+        .setTitle('🎉 Licence générée !')
+        .setDescription(`**Votre licence Auto Vote Bot :**\n\n\`${license.key}\``)
+        .addFields(
+          { name: '⏰ Durée', value: `${duration} jours`, inline: true },
+          { name: '📅 Expire le', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`, inline: true },
+          { name: '\u200B', value: '\u200B', inline: true },
+          { name: '🆔 Discord User ID', value: `**⚠️ IMPORTANT - À COPIER :**\n\`${targetUser.id}\`\n\nCette licence est liée à votre compte Discord.\nVous **DEVEZ** entrer cet ID lors de l'activation !`, inline: false },
+          { name: '📥 Installation', value: '1. Installez l\'extension Chrome\n2. Ouvrez le popup d\'activation\n3. Entrez votre clé de licence\n4. **Entrez votre Discord User ID** (obligatoire)\n5. Profitez !', inline: false }
+        )
+        .setFooter({ text: '⚠️ Gardez cette clé ET votre Discord User ID secrets !' })
+        .setTimestamp();
+      
+      await targetUser.send({ embeds: [dmEmbed] });
+    } catch (error) {
+      console.error('Impossible d\'envoyer DM:', error);
+    }
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x10b981)
+      .setTitle('✅ Licence générée')
+      .addFields(
+        { name: 'Utilisateur', value: `<@${targetUser.id}>`, inline: true },
+        { name: 'Discord User ID', value: `\`${targetUser.id}\``, inline: true },
+        { name: '\u200B', value: '\u200B', inline: true },
+        { name: 'Clé', value: `\`${license.key}\``, inline: false },
+        { name: '⏰ Durée', value: `${duration} jours`, inline: true },
+        { name: '📅 Expire le', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`, inline: true }
+      )
+      .setTimestamp();
+    
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    
   } catch (error) {
-    console.error('Impossible d\'envoyer DM:', error);
+    console.error('❌ Erreur génération licence:', error);
+    await interaction.reply({
+      content: `❌ Erreur lors de la génération : ${error.message}`,
+      ephemeral: true
+    });
   }
-  
-  const embed = new EmbedBuilder()
-    .setColor(0x10b981)
-    .setTitle('✅ Licence générée')
-    .addFields(
-      { name: 'Utilisateur', value: targetUser.username, inline: true },
-      { name: 'Clé', value: `\`${license.key}\``, inline: true },
-      { name: 'Expire', value: expiresAt ? new Date(expiresAt).toLocaleDateString('fr-FR') : 'Jamais', inline: true },
-      { name: '🆔 Discord User ID', value: `Liée à <@${targetUser.id}>`, inline: false }
-    )
-    .setTimestamp();
-  
-  await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 async function handleRevokeCommand(interaction) {
@@ -458,24 +516,52 @@ async function handleCheckCommand(interaction) {
     'expired': '⏰'
   };
   
+  const now = new Date();
+  const daysRemaining = Math.ceil((license.expiresAt - now) / (1000 * 60 * 60 * 24));
+  const isExpiringSoon = daysRemaining <= 7 && daysRemaining > 0;
+  
   const embed = new EmbedBuilder()
-    .setColor(license.status === 'active' ? 0x10b981 : 0xef4444)
+    .setColor(
+      license.status === 'expired' ? 0xef4444 : 
+      isExpiringSoon ? 0xf59e0b : 
+      0x10b981
+    )
     .setTitle('🔍 Informations Licence')
     .addFields(
       { name: 'Clé', value: `\`${license.key}\``, inline: false },
       { name: 'Utilisateur', value: license.username, inline: true },
-      { name: '🆔 Discord User ID', value: license.discordUserId ? `<@${license.discordUserId}>` : 'Non lié', inline: true },  // ✅ NOUVEAU
+      { name: '🆔 Discord User ID', value: `<@${license.discordUserId}>`, inline: true },
       { name: 'Statut', value: `${statusEmoji[license.status]} ${license.status}`, inline: true },
       { name: 'Utilisations', value: license.usageCount.toString(), inline: true },
       { name: 'IPs différentes', value: license.ipAddresses.length.toString(), inline: true },
-      { name: 'Créée le', value: new Date(license.createdAt).toLocaleDateString('fr-FR'), inline: true },
-      { name: 'Expire', value: license.expiresAt ? new Date(license.expiresAt).toLocaleDateString('fr-FR') : 'Jamais', inline: true }
+      { name: 'Créée le', value: `<t:${Math.floor(license.createdAt.getTime() / 1000)}:F>`, inline: true }
     );
+  
+  // Affichage de l'expiration avec jours restants
+  const expirationTimestamp = Math.floor(license.expiresAt.getTime() / 1000);
+  let expirationText = `<t:${expirationTimestamp}:F>`;
+  
+  if (license.status === 'active') {
+    if (daysRemaining > 0) {
+      expirationText += `\n(${daysRemaining} jour${daysRemaining > 1 ? 's' : ''} restant${daysRemaining > 1 ? 's' : ''})`;
+      if (isExpiringSoon) {
+        expirationText += ' ⚠️';
+      }
+    } else {
+      expirationText += '\n(Expirée)';
+    }
+  }
+  
+  embed.addFields({
+    name: '📅 Expire',
+    value: expirationText,
+    inline: true
+  });
   
   if (license.lastUsed) {
     embed.addFields({
       name: 'Dernière utilisation',
-      value: new Date(license.lastUsed).toLocaleString('fr-FR'),
+      value: `<t:${Math.floor(license.lastUsed.getTime() / 1000)}:R>`,
       inline: false
     });
   }
@@ -494,8 +580,8 @@ async function handleStatsCommand(interaction) {
       { name: 'Actives', value: `✅ ${stats.active}`, inline: true },
       { name: 'Révoquées', value: `🚫 ${stats.revoked}`, inline: true },
       { name: 'Expirées', value: `⏰ ${stats.expired}`, inline: true },
-      { name: '🔗 Liées Discord', value: stats.linked.toString(), inline: true },  // ✅ NOUVEAU
-      { name: '\u200B', value: '\u200B', inline: true }
+      { name: '🔗 Liées Discord', value: stats.linked.toString(), inline: true },
+      { name: '⚠️ Expirent bientôt', value: `${stats.expiringSoon} (7 jours)`, inline: true }
     )
     .setFooter({ text: 'Auto Vote Bot' })
     .setTimestamp();
@@ -519,7 +605,7 @@ async function handleLogsCommand(interaction) {
   
   const logText = logs.map(log => {
     const emoji = log.success ? '✅' : '❌';
-    const time = new Date(log.timestamp).toLocaleString('fr-FR');
+    const time = `<t:${Math.floor(log.timestamp.getTime() / 1000)}:R>`;
     const discord = log.discordUserId ? ` (Discord: ${log.discordUserId})` : '';
     return `${emoji} ${log.action} - ${time} - ${log.ip || 'N/A'}${discord}`;
   }).join('\n');
@@ -534,7 +620,6 @@ async function handleLogsCommand(interaction) {
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-// ✅ NOUVEAU Handler
 async function handleLinkCommand(interaction) {
   const key = interaction.options.getString('key');
   const targetUser = interaction.options.getUser('user');
@@ -571,7 +656,6 @@ async function handleLinkCommand(interaction) {
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-// ✅ NOUVEAU Handler
 async function handleUnlinkCommand(interaction) {
   const key = interaction.options.getString('key');
   
@@ -603,10 +687,68 @@ async function handleUnlinkCommand(interaction) {
       { name: 'Ancien Discord User', value: `<@${previousUserId}>`, inline: true },
       { name: 'User ID', value: previousUserId, inline: true }
     )
-    .setDescription('La licence peut maintenant être liée à un autre compte Discord.')
+    .setDescription('⚠️ La licence peut maintenant être liée à un autre compte Discord.')
     .setTimestamp();
   
   await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+async function handleExtendCommand(interaction) {
+  const key = interaction.options.getString('key');
+  const days = interaction.options.getInteger('days');
+  
+  const license = await License.findOne({ key });
+  
+  if (!license) {
+    return interaction.reply({
+      content: '❌ Licence introuvable',
+      ephemeral: true
+    });
+  }
+  
+  const oldExpiry = new Date(license.expiresAt);
+  const newExpiry = new Date(license.expiresAt.getTime() + days * 24 * 60 * 60 * 1000);
+  
+  license.expiresAt = newExpiry;
+  
+  // Si la licence était expirée, la réactiver
+  if (license.status === 'expired') {
+    license.status = 'active';
+  }
+  
+  await license.save();
+  
+  const embed = new EmbedBuilder()
+    .setColor(0x10b981)
+    .setTitle('⏰ Licence Prolongée')
+    .addFields(
+      { name: 'Clé', value: `\`${license.key}\``, inline: false },
+      { name: 'Utilisateur', value: `<@${license.discordUserId}>`, inline: true },
+      { name: 'Jours ajoutés', value: `+${days} jours`, inline: true },
+      { name: '\u200B', value: '\u200B', inline: true },
+      { name: 'Ancienne expiration', value: `<t:${Math.floor(oldExpiry.getTime() / 1000)}:F>`, inline: false },
+      { name: 'Nouvelle expiration', value: `<t:${Math.floor(newExpiry.getTime() / 1000)}:F>`, inline: false }
+    )
+    .setTimestamp();
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+  
+  // Notifier l'utilisateur
+  try {
+    const user = await client.users.fetch(license.discordUserId);
+    const dmEmbed = new EmbedBuilder()
+      .setColor(0x10b981)
+      .setTitle('🎉 Licence Prolongée !')
+      .setDescription(`Votre licence a été prolongée de **${days} jours** !`)
+      .addFields(
+        { name: 'Nouvelle expiration', value: `<t:${Math.floor(newExpiry.getTime() / 1000)}:F>`, inline: false }
+      )
+      .setTimestamp();
+    
+    await user.send({ embeds: [dmEmbed] });
+  } catch (error) {
+    console.error('Impossible d\'envoyer DM:', error);
+  }
 }
 
 // ========== DÉMARRAGE ==========
