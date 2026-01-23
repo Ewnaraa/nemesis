@@ -47,19 +47,24 @@ const licenseSchema = new mongoose.Schema({
     default: null
   },
   
-  lastVerified: {  // ✅ NOUVEAU : Dernière vérification
+  lastVerified: {
     type: Date,
     default: null
   },
   
-  usageCount: {  // ✅ MODIFIÉ : Nombre de votes réussis (pas de vérifications)
+  usageCount: {
     type: Number,
     default: 0
   },
   
-  verificationCount: {  // ✅ NOUVEAU : Nombre total de vérifications
+  verificationCount: {
     type: Number,
     default: 0
+  },
+  
+  suspendedUntil: {
+    type: Date,
+    default: null
   },
   
   ipAddresses: [{
@@ -94,7 +99,7 @@ licenseSchema.methods.isValid = function() {
   return true;
 };
 
-// ✅ NOUVEAU : Méthode pour enregistrer une simple vérification
+// Méthode pour enregistrer une simple vérification
 licenseSchema.methods.recordVerification = async function(ipAddress, discordUserId) {
   this.lastVerified = new Date();
   this.verificationCount += 1;
@@ -118,11 +123,11 @@ licenseSchema.methods.recordVerification = async function(ipAddress, discordUser
   await this.save();
 };
 
-// ✅ MODIFIÉ : Méthode pour enregistrer une utilisation réelle (vote)
+// Méthode pour enregistrer une utilisation réelle (vote)
 licenseSchema.methods.recordUsage = async function(ipAddress, discordUserId) {
   this.lastUsed = new Date();
   this.lastVerified = new Date();
-  this.usageCount += 1;  // ✅ Seulement pour les votes réussis
+  this.usageCount += 1;
   this.verificationCount += 1;
   
   if (this.discordUserId !== discordUserId) {
@@ -161,15 +166,16 @@ const logSchema = new mongoose.Schema({
       'activate', 
       'revoke', 
       'usage',
-      'VERIFY_FAILED',           // ✅ AJOUTER
-      'IP_ADDED',                // ✅ AJOUTER
-      'IP_WARNING',              // ✅ AJOUTER
-      'LICENSE_SUSPENDED',       // ✅ AJOUTER
-      'LICENSE_REVOKED',         // ✅ AJOUTER
-      'VERIFY_SUSPENDED',        // ✅ AJOUTER
-      'SUSPENSION_LIFTED',       // ✅ AJOUTER
-      'VERIFICATION',            // ✅ AJOUTER
-      'USAGE'                    // ✅ AJOUTER
+      'VERIFY_FAILED',
+      'IP_ADDED',
+      'IP_WARNING',
+      'LICENSE_SUSPENDED',
+      'LICENSE_REVOKED',
+      'VERIFY_SUSPENDED',
+      'SUSPENSION_LIFTED',
+      'VERIFICATION',
+      'USAGE',
+      'REACTIVATED'
     ],
     required: true
   },
@@ -234,18 +240,18 @@ function generateLicenseKey() {
 
 // Créer une nouvelle licence
 async function createLicense(userId, username, options = {}) {
-  // ✅ VÉRIFICATION : Discord User ID obligatoire
+  // Vérification : Discord User ID obligatoire
   if (!options.discordUserId) {
     throw new Error('Discord User ID est obligatoire');
   }
   
   const key = generateLicenseKey();
   
-  // ✅ DURÉE PAR DÉFAUT : 30 jours
-  const defaultDuration = 30; // jours
+  // Durée par défaut : 30 jours
+  const defaultDuration = 30;
   const duration = options.duration !== undefined ? options.duration : defaultDuration;
   
-  // ✅ Calculer la date d'expiration (toujours définie)
+  // Calculer la date d'expiration
   const expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
   
   const license = new License({
@@ -253,8 +259,8 @@ async function createLicense(userId, username, options = {}) {
     userId,
     username,
     email: options.email,
-    discordUserId: options.discordUserId,  // ✅ OBLIGATOIRE
-    expiresAt: expiresAt,  // ✅ TOUJOURS défini
+    discordUserId: options.discordUserId,
+    expiresAt: expiresAt,
     metadata: {
       stripePaymentId: options.stripePaymentId,
       stripeCustomerId: options.stripeCustomerId,
@@ -320,14 +326,18 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
     // ========== SYSTÈME ANTI-PARTAGE PROGRESSIF ==========
     
     const currentIPCount = license.ipAddresses.length;
-    const isNewIP = !license.ipAddresses.includes(ip);
+    const isNewIP = !license.ipAddresses.some(item => item.ip === ip);
     
     if (isNewIP) {
       const newIPCount = currentIPCount + 1;
       
       // 🟢 Niveau 1 : OK (0-2 IPs)
       if (newIPCount <= 2) {
-        license.ipAddresses.push(ip);
+        license.ipAddresses.push({
+          ip: ip,
+          firstSeen: new Date(),
+          lastSeen: new Date()
+        });
         console.log(`✅ [SECURITY] Licence ${key} - IP ajoutée (${newIPCount}/2)`);
         
         await Log.create({
@@ -342,7 +352,11 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
       
       // 🟡 Niveau 2 : Avertissement (3 IPs)
       else if (newIPCount === 3) {
-        license.ipAddresses.push(ip);
+        license.ipAddresses.push({
+          ip: ip,
+          firstSeen: new Date(),
+          lastSeen: new Date()
+        });
         console.log(`⚠️ [SECURITY] Licence ${key} - AVERTISSEMENT (3 IPs)`);
         
         await Log.create({
@@ -359,7 +373,7 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
           level: 'warning',
           license: license,
           message: `3 IPs différentes détectées`,
-          ips: license.ipAddresses
+          ips: license.ipAddresses.map(item => item.ip)
         });
       }
       
@@ -385,7 +399,7 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
           level: 'urgent',
           license: license,
           message: `Licence SUSPENDUE - ${newIPCount} IPs détectées`,
-          ips: [...license.ipAddresses, ip]
+          ips: [...license.ipAddresses.map(item => item.ip), ip]
         });
         
         return { 
@@ -415,7 +429,7 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
           level: 'critical',
           license: license,
           message: `Licence RÉVOQUÉE - ${newIPCount} IPs (partage confirmé)`,
-          ips: [...license.ipAddresses, ip]
+          ips: [...license.ipAddresses.map(item => item.ip), ip]
         });
         
         return { 
@@ -559,7 +573,6 @@ async function getStats() {
   const expired = await License.countDocuments({ status: 'expired' });
   const linked = await License.countDocuments({ discordUserId: { $ne: null } });
   
-  // ✅ NOUVEAU : Stats sur les expirations à venir
   const now = new Date();
   const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const expiringSoon = await License.countDocuments({ 
@@ -577,10 +590,11 @@ async function getStats() {
     revoked,
     expired,
     linked,
-    expiringSoon,  // ✅ NOUVEAU
+    expiringSoon,
     recentActivity: recentLogs
   };
 }
+
 // ========== ALERTES SÉCURITÉ ==========
 
 async function sendSecurityAlert({ level, license, message, ips }) {
@@ -602,6 +616,9 @@ async function sendSecurityAlert({ level, license, message, ips }) {
     critical: '❌'
   };
   
+  // Extraire les IPs si c'est un array d'objets
+  const ipList = ips.map(item => typeof item === 'string' ? item : item.ip);
+  
   try {
     await fetch(process.env.ADMIN_WEBHOOK_URL, {
       method: 'POST',
@@ -615,7 +632,7 @@ async function sendSecurityAlert({ level, license, message, ips }) {
             { name: 'Clé', value: `\`${license.key}\``, inline: true },
             { name: 'User', value: `<@${license.discordUserId}>`, inline: true },
             { name: 'Username', value: license.username, inline: true },
-            { name: 'IPs détectées', value: ips.slice(0, 10).map(ip => `\`${ip}\``).join('\n') || 'Aucune', inline: false },
+            { name: 'IPs détectées', value: ipList.slice(0, 10).map(ip => `\`${ip}\``).join('\n') || 'Aucune', inline: false },
             { name: 'Votes effectués', value: license.usageCount.toString(), inline: true },
             { name: 'Statut actuel', value: license.status.toUpperCase(), inline: true }
           ],
@@ -639,7 +656,7 @@ module.exports = {
   verifyLicense,
   revokeLicense,
   getStats,
-  sendSecurityAlert,  // ✅ NOUVEAU
+  sendSecurityAlert,
   License,
   Log
 };
