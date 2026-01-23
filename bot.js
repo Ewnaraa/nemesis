@@ -11,6 +11,8 @@ const {
   ButtonStyle,           // ✅ AJOUTER
   StringSelectMenuBuilder // ✅ AJOUTER
 } = require('discord.js');
+const { REST } = require('@discordjs/rest');
+const { Routes } = require('discord-api-types/v10');
 
 const express = require('express');
 const cors = require('cors');
