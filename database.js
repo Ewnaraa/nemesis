@@ -627,6 +627,5 @@ module.exports = {
   getStats,
   sendSecurityAlert,  // ✅ NOUVEAU
   License,
-  Log,
-  Backup
+  Log
 };
