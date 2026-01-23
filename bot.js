@@ -394,6 +394,23 @@ const commands = [
         .setDescription('Utilisateur filleul')
         .setRequired(true)
     ),
+  // Dans le tableau commands
+new SlashCommandBuilder()
+  .setName('unsuspend')
+  .setDescription('[ADMIN] Lever la suspension d\'une licence')
+  .addStringOption(option =>
+    option
+      .setName('key')
+      .setDescription('Clé de licence')
+      .setRequired(false)
+  )
+  .addUserOption(option =>
+    option
+      .setName('user')
+      .setDescription('Utilisateur Discord')
+      .setRequired(false)
+  ),
+  
 ];
 
 // ========== ENREGISTRER LES COMMANDES ==========
@@ -500,6 +517,9 @@ client.on('interactionCreate', async (interaction) => {
     case 'refer':
       await handleReferCommand(interaction);
       break;
+        case 'unsuspend':
+  await handleUnsuspendCommand(interaction);
+  break;
     }
   } catch (error) {
     console.error(`❌ [COMMAND] Erreur ${commandName}:`, error);
@@ -511,7 +531,76 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ========== HANDLERS DES COMMANDES ==========
-
+async function handleUnsuspendCommand(interaction) {
+  const key = interaction.options.getString('key');
+  const user = interaction.options.getUser('user');
+  
+  if (!key && !user) {
+    return interaction.reply({
+      content: '❌ Vous devez fournir soit une clé, soit un utilisateur.',
+      ephemeral: true
+    });
+  }
+  
+  let license;
+  
+  if (user) {
+    license = await License.findOne({ discordUserId: user.id });
+  } else {
+    license = await License.findOne({ key });
+  }
+  
+  if (!license) {
+    return interaction.reply({
+      content: '❌ Licence introuvable',
+      ephemeral: true
+    });
+  }
+  
+  if (license.status !== 'suspended') {
+    return interaction.reply({
+      content: `⚠️ Cette licence n'est pas suspendue (statut: ${license.status})`,
+      ephemeral: true
+    });
+  }
+  
+  // Lever la suspension
+  license.status = 'active';
+  license.suspendedUntil = null;
+  await license.save();
+  
+  const embed = new EmbedBuilder()
+    .setColor(0x10b981)
+    .setTitle('✅ Suspension Levée')
+    .addFields(
+      { name: 'Clé', value: `\`${license.key}\``, inline: false },
+      { name: 'User', value: `<@${license.discordUserId}>`, inline: true },
+      { name: 'IPs', value: `${license.ipAddresses.length} IP(s)`, inline: true },
+      { name: 'Statut', value: 'ACTIVE', inline: true }
+    )
+    .setTimestamp();
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+  
+  // Notifier le user
+  try {
+    const discordUser = await client.users.fetch(license.discordUserId);
+    await discordUser.send({
+      embeds: [new EmbedBuilder()
+        .setColor(0x10b981)
+        .setTitle('✅ Licence Réactivée')
+        .setDescription('Votre licence a été réactivée par un administrateur.')
+        .addFields({
+          name: 'Note',
+          value: 'Assurez-vous de ne pas partager votre licence pour éviter une nouvelle suspension.',
+          inline: false
+        })
+      ]
+    });
+  } catch (error) {
+    console.error('Impossible d\'envoyer DM:', error);
+  }
+}
 async function handleBuyCommand(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0x6366f1)
