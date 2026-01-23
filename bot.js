@@ -415,21 +415,6 @@ new SlashCommandBuilder()
       .setDescription('Utilisateur Discord')
       .setRequired(false)
   ),
-  new SlashCommandBuilder()
-  .setName('unsuspend')
-  .setDescription('[ADMIN] Lever la suspension d\'une licence')
-  .addStringOption(option =>
-    option
-      .setName('key')
-      .setDescription('Clé de licence')
-      .setRequired(false)
-  )
-  .addUserOption(option =>
-    option
-      .setName('user')
-      .setDescription('Utilisateur Discord')
-      .setRequired(false)
-  ),
 
 // ✅ AJOUTER CETTE COMMANDE ICI
 new SlashCommandBuilder()
