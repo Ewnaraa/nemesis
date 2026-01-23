@@ -57,6 +57,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// ✅ AJOUTER CETTE LIGNE ICI
+app.options('*', cors());
+
 app.use(express.json());
 
 // ========== API ROUTES ==========
