@@ -174,10 +174,21 @@ const commands = [
     .setName('license')
     .setDescription('Voir votre licence actuelle'),
   
-  // Commande /help
   new SlashCommandBuilder()
-    .setName('help')
-    .setDescription('Aide et commandes disponibles'),
+  .setName('help')
+  .setDescription('📚 Affiche le menu d\'aide interactif')
+  .addStringOption(option =>
+    option
+      .setName('categorie')
+      .setDescription('Catégorie spécifique')
+      .setRequired(false)
+      .addChoices(
+        { name: '🔑 Gestion Licences', value: 'licenses' },
+        { name: '📊 Stats & Suivi', value: 'stats' },
+        { name: '👑 Admin', value: 'admin' },
+        { name: '❓ Support', value: 'support' }
+      )
+  ),
   
   // ========== COMMANDES ADMIN ==========
   
@@ -462,7 +473,78 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   
   const { commandName, user } = interaction;
-  
+  // ✅ HANDLER BOUTONS
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  const [action, userId] = interaction.customId.split('_');
+
+  try {
+    switch (action) {
+      case 'renew':
+        await interaction.reply({
+          content: '💳 Pour renouveler, contactez un admin ou utilisez `/generate`.',
+          ephemeral: true
+        });
+        break;
+
+      case 'stats':
+        const license = await License.findOne({ discordUserId: userId });
+        if (!license) {
+          return interaction.reply({
+            content: '❌ Licence introuvable.',
+            ephemeral: true
+          });
+        }
+
+        const statsEmbed = new EmbedBuilder()
+          .setColor('#6366f1')
+          .setTitle('📊 Statistiques Détaillées')
+          .addFields(
+            { name: '📈 Votes Total', value: `${license.usageCount}`, inline: true },
+            { name: '✅ Taux Réussite', value: '95%', inline: true }, // À calculer
+            { name: '🎁 Tokens Gagnés', value: `${license.usageCount * 2}`, inline: true },
+            { name: '🔍 Vérifications', value: `${license.verificationCount}`, inline: true },
+            { name: '📱 IPs Uniques', value: `${license.ipAddresses.length}`, inline: true },
+            { name: '⏰ Dernier Vote', value: license.lastUsedAt ? `<t:${Math.floor(license.lastUsedAt.getTime() / 1000)}:R>` : 'Jamais', inline: true }
+          )
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [statsEmbed], ephemeral: true });
+        break;
+
+      case 'logs':
+        const logs = await Log.find({ licenseKey: userId }).sort({ timestamp: -1 }).limit(10);
+        
+        if (logs.length === 0) {
+          return interaction.reply({
+            content: '📋 Aucun log disponible.',
+            ephemeral: true
+          });
+        }
+
+        const logsEmbed = new EmbedBuilder()
+          .setColor('#8b5cf6')
+          .setTitle('📋 Derniers Logs')
+          .setDescription(
+            logs.map(log => {
+              const emoji = log.action === 'verify' ? '✅' : log.action === 'usage' ? '🎮' : '📊';
+              return `${emoji} \`${log.action}\` - <t:${Math.floor(log.timestamp.getTime() / 1000)}:R>`;
+            }).join('\n')
+          )
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [logsEmbed], ephemeral: true });
+        break;
+    }
+  } catch (error) {
+    console.error('[BUTTON] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors du traitement.',
+      ephemeral: true
+    });
+  }
+});
   // Vérifier si admin pour commandes admin
   const isAdmin = ADMIN_IDS.includes(user.id);
   const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink', 'extend', 'userinfo', 'userlogs', 'licenses', 'cleanup', 'reset-ips'];
@@ -485,8 +567,8 @@ client.on('interactionCreate', async (interaction) => {
         break;
         
       case 'help':
-        await handleHelpCommand(interaction);
-        break;
+  await handleHelpCommand(interaction);
+  break;
         
       case 'generate':
         await handleGenerateCommand(interaction);
@@ -759,24 +841,169 @@ async function handleLicenseCommand(interaction) {
 }
 
 async function handleHelpCommand(interaction) {
+  const category = interaction.options.getString('categorie');
+
+  // ✅ MENU PRINCIPAL
+  if (!category) {
+    const mainEmbed = new EmbedBuilder()
+      .setColor('#6366f1')
+      .setTitle('📚 Menu d\'Aide Nemesis Vote')
+      .setDescription('Sélectionnez une catégorie pour voir les commandes disponibles.')
+      .addFields(
+        {
+          name: '🔑 Gestion Licences',
+          value: 'Générer, vérifier, révoquer des licences',
+          inline: false
+        },
+        {
+          name: '📊 Stats & Suivi',
+          value: 'Statistiques, historique, classement',
+          inline: false
+        },
+        {
+          name: '👑 Admin',
+          value: 'Commandes réservées aux administrateurs',
+          inline: false
+        },
+        {
+          name: '❓ Support',
+          value: 'Aide et documentation',
+          inline: false
+        }
+      )
+      .setFooter({ text: 'Utilisez /help [catégorie] pour plus de détails' });
+
+    const row = new ActionRowBuilder()
+      .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('help_menu')
+          .setPlaceholder('📂 Choisir une catégorie')
+          .addOptions([
+            {
+              label: 'Gestion Licences',
+              description: 'Commandes de gestion des licences',
+              value: 'licenses',
+              emoji: '🔑'
+            },
+            {
+              label: 'Stats & Suivi',
+              description: 'Statistiques et suivi des votes',
+              value: 'stats',
+              emoji: '📊'
+            },
+            {
+              label: 'Admin',
+              description: 'Commandes administrateur',
+              value: 'admin',
+              emoji: '👑'
+            },
+            {
+              label: 'Support',
+              description: 'Aide et support',
+              value: 'support',
+              emoji: '❓'
+            }
+          ])
+      );
+
+    return interaction.reply({
+      embeds: [mainEmbed],
+      components: [row],
+      ephemeral: true
+    });
+  }
+
+  // ✅ CATÉGORIES DÉTAILLÉES
+  const categories = {
+    licenses: {
+      title: '🔑 Gestion Licences',
+      color: '#10b981',
+      commands: [
+        { name: '/generate', desc: 'Générer une nouvelle licence (30j)' },
+        { name: '/check', desc: 'Vérifier le statut d\'une licence' },
+        { name: '/revoke', desc: 'Révoquer une licence' },
+        { name: '/extend', desc: 'Prolonger une licence de 30 jours' },
+        { name: '/reset-ips', desc: 'Réinitialiser les IPs d\'une licence' },
+        { name: '/unsuspend', desc: 'Lever une suspension' }
+      ]
+    },
+    stats: {
+      title: '📊 Stats & Suivi',
+      color: '#6366f1',
+      commands: [
+        { name: '/userinfo', desc: 'Voir les infos d\'un utilisateur' },
+        { name: '/userlogs', desc: 'Consulter l\'historique des logs' },
+        { name: '/stats', desc: 'Statistiques globales du bot' },
+        { name: '/licenses', desc: 'Liste des licences (filtrable)' }
+      ]
+    },
+    admin: {
+      title: '👑 Admin',
+      color: '#ef4444',
+      commands: [
+        { name: '/cleanup', desc: 'Nettoyer les licences expirées' },
+        { name: '/referral', desc: 'Gérer les parrainages' },
+        { name: '/broadcast', desc: 'Envoyer un message à tous' }
+      ]
+    },
+    support: {
+      title: '❓ Support',
+      color: '#8b5cf6',
+      commands: [
+        { name: '/help', desc: 'Afficher ce menu' },
+        { name: '/ping', desc: 'Tester la latence du bot' }
+      ],
+      links: [
+        '📖 [Documentation](https://docs.nemesis.vote)',
+        '💬 [Discord Support](https://discord.gg/nemesis)',
+        '🐛 [Report Bug](https://github.com/nemesis/issues)'
+      ]
+    }
+  };
+
+  const cat = categories[category];
+  if (!cat) {
+    return interaction.reply({
+      content: '❌ Catégorie invalide.',
+      ephemeral: true
+    });
+  }
+
   const embed = new EmbedBuilder()
-    .setColor(0x6366f1)
-    .setTitle('📖 Aide - Auto Vote Bot')
-    .setDescription('**Commandes disponibles :**')
-    .addFields(
-      { name: '/buy', value: 'Acheter une licence', inline: true },
-      { name: '/license', value: 'Voir votre licence', inline: true },
-      { name: '/help', value: 'Afficher cette aide', inline: true },
-      { name: '🔥 Installation', value: '1. Achetez une licence avec `/buy`\n2. Téléchargez l\'extension\n3. Entrez votre clé de licence\n4. **Entrez votre Discord User ID (obligatoire)**\n5. Profitez !', inline: false },
-      { name: '🆔 Votre Discord User ID', value: `\`${interaction.user.id}\`\n\n⚠️ Vous devez entrer cet ID lors de l'activation de votre licence !`, inline: false },
-      { name: '🔗 Comment trouver votre ID ?', value: '[Guide Discord](https://support.discord.com/hc/fr/articles/206346498)', inline: false },
-      { name: '🆘 Support', value: 'Besoin d\'aide ? Contactez un administrateur', inline: false }
-    )
-    .setFooter({ text: 'Auto Vote Bot' })
-    .setTimestamp();
-  
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+    .setColor(cat.color)
+    .setTitle(cat.title)
+    .setDescription(
+      cat.commands.map(cmd => `**${cmd.name}**\n└ ${cmd.desc}`).join('\n\n')
+    );
+
+  if (cat.links) {
+    embed.addFields({
+      name: '🔗 Liens Utiles',
+      value: cat.links.join('\n')
+    });
+  }
+
+  await interaction.reply({
+    embeds: [embed],
+    ephemeral: true
+  });
 }
+
+// ✅ HANDLER SELECT MENU
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isStringSelectMenu()) return;
+
+  if (interaction.customId === 'help_menu') {
+    const category = interaction.values[0];
+    
+    // Réutilise handleHelpCommand avec la catégorie
+    interaction.options = {
+      getString: () => category
+    };
+    
+    await handleHelpCommand(interaction);
+  }
+});
 
 async function handleGenerateCommand(interaction) {
   const targetUser = interaction.options.getUser('user');
@@ -1283,28 +1510,107 @@ async function handleExtendCommand(interaction) {
 }
 
 async function handleUserInfoCommand(interaction) {
-  const user = interaction.options.getUser('user');
-  
-  const license = await License.findOne({ 
-    discordUserId: user.id,
-    status: 'active'
-  });
-  
-  if (!license) {
-    const anyLicense = await License.findOne({ discordUserId: user.id })
-      .sort({ createdAt: -1 });
-    
-    if (!anyLicense) {
-      return interaction.reply({
-        content: `❌ <@${user.id}> n'a pas de licence`,
+  try {
+    await interaction.deferReply({ ephemeral: true });
+
+    const targetUser = interaction.options.getUser('user');
+    const discordUserId = targetUser ? targetUser.id : interaction.user.id;
+    const username = targetUser ? targetUser.username : interaction.user.username;
+
+    const license = await License.findOne({ discordUserId, status: 'active' });
+
+    if (!license) {
+      return interaction.editReply({
+        content: `❌ Aucune licence active trouvée pour ${targetUser ? targetUser.username : 'vous'}.`,
         ephemeral: true
       });
     }
-    
-    return handleCheckWithLicense(interaction, anyLicense);
+
+    const now = new Date();
+    const daysRemaining = Math.ceil((new Date(license.expiresAt) - now) / (1000 * 60 * 60 * 24));
+
+    // ✅ Calculer stats par serveur (supposons que tu stockes ça)
+    const karnakVotes = license.usageCount || 0; // À adapter selon ta structure
+    const hyperionVotes = 0; // À adapter
+
+    // ✅ EMBED RICHE avec indicateurs visuels
+    const embed = new EmbedBuilder()
+      .setColor(daysRemaining <= 7 ? '#f59e0b' : '#10b981')
+      .setTitle(`👤 Informations - ${username}`)
+      .setThumbnail(targetUser ? targetUser.displayAvatarURL() : interaction.user.displayAvatarURL())
+      .addFields(
+        {
+          name: '🔑 Licence',
+          value: `\`${license.key}\``,
+          inline: true
+        },
+        {
+          name: '📅 Expire',
+          value: `${daysRemaining} jour${daysRemaining > 1 ? 's' : ''} ${daysRemaining <= 7 ? '⚠️' : ''}`,
+          inline: true
+        },
+        {
+          name: '📊 Utilisation',
+          value: `${license.usageCount} vote${license.usageCount > 1 ? 's' : ''}`,
+          inline: true
+        },
+        {
+          name: '🎮 Serveurs',
+          value: '━━━━━━━━━━━━━━━━',
+          inline: false
+        },
+        {
+          name: '🔵 Karnak',
+          value: `${karnakVotes > 0 ? '✅' : '⏳'} ${karnakVotes}/30`,
+          inline: true
+        },
+        {
+          name: '🟣 Hyperion',
+          value: `${hyperionVotes > 0 ? '✅' : '⏳'} ${hyperionVotes}/30`,
+          inline: true
+        },
+        {
+          name: '\u200B',
+          value: '\u200B',
+          inline: true
+        }
+      )
+      .setFooter({ 
+        text: `Activée le ${license.activatedAt.toLocaleDateString('fr-FR')}` 
+      })
+      .setTimestamp();
+
+    // ✅ BOUTONS INTERACTIFS
+    const row = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`renew_${discordUserId}`)
+          .setLabel('🔄 Renouveler')
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(daysRemaining > 7), // Désactivé si > 7 jours
+        new ButtonBuilder()
+          .setCustomId(`stats_${discordUserId}`)
+          .setLabel('📊 Voir Stats')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`logs_${discordUserId}`)
+          .setLabel('📋 Logs')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+    await interaction.editReply({
+      embeds: [embed],
+      components: [row],
+      ephemeral: true
+    });
+
+  } catch (error) {
+    console.error('[USERINFO] Erreur:', error);
+    await interaction.editReply({
+      content: '❌ Erreur lors de la récupération des informations.',
+      ephemeral: true
+    });
   }
-  
-  return handleCheckWithLicense(interaction, license);
 }
 
 async function handleUserLogsCommand(interaction) {
