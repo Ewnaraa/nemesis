@@ -156,7 +156,21 @@ const logSchema = new mongoose.Schema({
   
   action: {
     type: String,
-    enum: ['verify', 'activate', 'revoke', 'usage'],
+    enum: [
+      'verify', 
+      'activate', 
+      'revoke', 
+      'usage',
+      'VERIFY_FAILED',           // ✅ AJOUTER
+      'IP_ADDED',                // ✅ AJOUTER
+      'IP_WARNING',              // ✅ AJOUTER
+      'LICENSE_SUSPENDED',       // ✅ AJOUTER
+      'LICENSE_REVOKED',         // ✅ AJOUTER
+      'VERIFY_SUSPENDED',        // ✅ AJOUTER
+      'SUSPENSION_LIFTED',       // ✅ AJOUTER
+      'VERIFICATION',            // ✅ AJOUTER
+      'USAGE'                    // ✅ AJOUTER
+    ],
     required: true
   },
   
