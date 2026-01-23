@@ -73,7 +73,12 @@ app.get('/', (req, res) => {
 // Vérifier une licence
 app.post('/api/verify', async (req, res) => {
   const { key, discordUserId, isRealUsage } = req.body;
-  const ip = req.ip || req.connection.remoteAddress;
+// ✅ Récupérer la vraie IP (pas celle de Railway)
+const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+           req.headers['x-real-ip'] || 
+           req.ip;
+
+console.log('[API] [VERIFY] IP réelle:', ip);
   
   if (!key) {
     return res.status(400).json({ valid: false, error: 'Clé requise' });
