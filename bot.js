@@ -855,120 +855,212 @@ async function handleLicenseCommand(interaction) {
 async function handleHelpCommand(interaction) {
   const category = interaction.options.getString('categorie');
 
-  // ✅ MENU PRINCIPAL
+  // ✅ MENU PRINCIPAL avec séparation claire
   if (!category) {
+    const isAdmin = ADMIN_USER_IDS.includes(interaction.user.id);
+
     const mainEmbed = new EmbedBuilder()
       .setColor('#6366f1')
       .setTitle('📚 Menu d\'Aide Nemesis Vote')
-      .setDescription('Sélectionnez une catégorie pour voir les commandes disponibles.')
+      .setDescription('Sélectionnez une catégorie ci-dessous pour voir les commandes disponibles.')
       .addFields(
         {
-          name: '🔑 Gestion Licences',
-          value: 'Générer, vérifier, révoquer des licences',
+          name: '👤 Pour Tous les Utilisateurs',
+          value: '━━━━━━━━━━━━━━━━━━━━',
           inline: false
         },
         {
-          name: '📊 Stats & Suivi',
-          value: 'Statistiques, historique, classement',
-          inline: false
-        },
-        {
-          name: '👑 Admin',
-          value: 'Commandes réservées aux administrateurs',
+          name: '📊 Mes Informations',
+          value: 'Vérifier ma licence, mes stats, mon parrainage',
           inline: false
         },
         {
           name: '❓ Support',
-          value: 'Aide et documentation',
+          value: 'Aide, documentation, contact',
           inline: false
         }
-      )
-      .setFooter({ text: 'Utilisez /help [catégorie] pour plus de détails' });
+      );
+
+    // ✅ Afficher section admin SEULEMENT si admin
+    if (isAdmin) {
+      mainEmbed.addFields(
+        {
+          name: '\u200B',
+          value: '👑 **Réservé aux Administrateurs**\n━━━━━━━━━━━━━━━━━━━━',
+          inline: false
+        },
+        {
+          name: '🔑 Gestion Licences',
+          value: 'Générer, révoquer, prolonger, gérer les licences',
+          inline: false
+        },
+        {
+          name: '📈 Administration',
+          value: 'Stats globales, logs système, maintenance',
+          inline: false
+        }
+      );
+    }
+
+    mainEmbed.setFooter({ text: isAdmin ? '👑 Vous avez accès aux commandes admin' : '👤 Utilisateur standard' });
+
+    const menuOptions = [
+      {
+        label: 'Mes Informations',
+        description: 'Vérifier licence, stats, parrainage',
+        value: 'user',
+        emoji: '📊'
+      },
+      {
+        label: 'Support',
+        description: 'Aide et documentation',
+        value: 'support',
+        emoji: '❓'
+      }
+    ];
+
+    // ✅ Ajouter options admin SEULEMENT si admin
+    if (isAdmin) {
+      menuOptions.push(
+        {
+          label: '─────────────',
+          description: 'Commandes Admin',
+          value: 'separator',
+          emoji: '👑'
+        },
+        {
+          label: 'Gestion Licences',
+          description: '[ADMIN] Gérer les licences',
+          value: 'licenses',
+          emoji: '🔑'
+        },
+        {
+          label: 'Administration',
+          description: '[ADMIN] Stats et maintenance',
+          value: 'admin',
+          emoji: '📈'
+        }
+      );
+    }
 
     const row = new ActionRowBuilder()
       .addComponents(
         new StringSelectMenuBuilder()
           .setCustomId('help_menu')
           .setPlaceholder('📂 Choisir une catégorie')
-          .addOptions([
-            {
-              label: 'Gestion Licences',
-              description: 'Commandes de gestion des licences',
-              value: 'licenses',
-              emoji: '🔑'
-            },
-            {
-              label: 'Stats & Suivi',
-              description: 'Statistiques et suivi des votes',
-              value: 'stats',
-              emoji: '📊'
-            },
-            {
-              label: 'Admin',
-              description: 'Commandes administrateur',
-              value: 'admin',
-              emoji: '👑'
-            },
-            {
-              label: 'Support',
-              description: 'Aide et support',
-              value: 'support',
-              emoji: '❓'
-            }
-          ])
+          .addOptions(menuOptions)
       );
 
     return interaction.reply({
       embeds: [mainEmbed],
       components: [row],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
   // ✅ CATÉGORIES DÉTAILLÉES
   const categories = {
-    licenses: {
-      title: '🔑 Gestion Licences',
+    user: {
+      title: '👤 Mes Informations',
       color: '#10b981',
+      adminOnly: false,
       commands: [
-        { name: '/generate', desc: 'Générer une nouvelle licence (30j)' },
-        { name: '/check', desc: 'Vérifier le statut d\'une licence' },
-        { name: '/revoke', desc: 'Révoquer une licence' },
-        { name: '/extend', desc: 'Prolonger une licence de 30 jours' },
-        { name: '/reset-ips', desc: 'Réinitialiser les IPs d\'une licence' },
-        { name: '/unsuspend', desc: 'Lever une suspension' }
-      ]
-    },
-    stats: {
-      title: '📊 Stats & Suivi',
-      color: '#6366f1',
-      commands: [
-        { name: '/userinfo', desc: 'Voir les infos d\'un utilisateur' },
-        { name: '/userlogs', desc: 'Consulter l\'historique des logs' },
-        { name: '/stats', desc: 'Statistiques globales du bot' },
-        { name: '/licenses', desc: 'Liste des licences (filtrable)' }
-      ]
-    },
-    admin: {
-      title: '👑 Admin',
-      color: '#ef4444',
-      commands: [
-        { name: '/cleanup', desc: 'Nettoyer les licences expirées' },
-        { name: '/referral', desc: 'Gérer les parrainages' },
-        { name: '/broadcast', desc: 'Envoyer un message à tous' }
+        { 
+          name: '/check', 
+          desc: 'Vérifier le statut de votre licence',
+          usage: '/check key:XXXX-XXXX-XXXX-XXXX'
+        },
+        { 
+          name: '/referral', 
+          desc: 'Voir votre code de parrainage et vos filleuls',
+          usage: '/referral'
+        }
       ]
     },
     support: {
-      title: '❓ Support',
+      title: '❓ Support & Aide',
       color: '#8b5cf6',
+      adminOnly: false,
       commands: [
-        { name: '/help', desc: 'Afficher ce menu' },
-        { name: '/ping', desc: 'Tester la latence du bot' }
+        { 
+          name: '/help', 
+          desc: 'Afficher ce menu d\'aide',
+          usage: '/help [catégorie]'
+        }
       ],
       links: [
         '📖 [Documentation](https://docs.nemesis.vote)',
         '💬 [Discord Support](https://discord.gg/nemesis)',
-        '🐛 [Report Bug](https://github.com/nemesis/issues)'
+        '📧 Email: support@nemesis.vote'
+      ]
+    },
+    licenses: {
+      title: '🔑 Gestion Licences',
+      color: '#ef4444',
+      adminOnly: true,
+      commands: [
+        { 
+          name: '/generate', 
+          desc: 'Générer une nouvelle licence (30 jours)',
+          usage: '/generate username:Matt discord_id:123456789'
+        },
+        { 
+          name: '/check', 
+          desc: 'Vérifier le statut d\'une licence',
+          usage: '/check key:XXXX-XXXX-XXXX-XXXX'
+        },
+        { 
+          name: '/revoke', 
+          desc: 'Révoquer définitivement une licence',
+          usage: '/revoke key:XXXX raison:"Partage de compte"'
+        },
+        { 
+          name: '/extend', 
+          desc: 'Prolonger une licence de 30 jours',
+          usage: '/extend key:XXXX-XXXX-XXXX-XXXX'
+        },
+        { 
+          name: '/reset-ips', 
+          desc: 'Réinitialiser les IPs d\'une licence',
+          usage: '/reset-ips key:XXXX ou user:@Matt'
+        },
+        { 
+          name: '/unsuspend', 
+          desc: 'Lever la suspension d\'une licence',
+          usage: '/unsuspend key:XXXX ou user:@Matt'
+        }
+      ]
+    },
+    admin: {
+      title: '📈 Administration',
+      color: '#6366f1',
+      adminOnly: true,
+      commands: [
+        { 
+          name: '/userinfo', 
+          desc: 'Voir les infos détaillées d\'un utilisateur',
+          usage: '/userinfo user:@Matt'
+        },
+        { 
+          name: '/userlogs', 
+          desc: 'Consulter l\'historique des logs',
+          usage: '/userlogs key:XXXX ou user:@Matt'
+        },
+        { 
+          name: '/stats', 
+          desc: 'Statistiques globales du système',
+          usage: '/stats'
+        },
+        { 
+          name: '/licenses', 
+          desc: 'Liste des licences avec filtres',
+          usage: '/licenses filter:actives'
+        },
+        { 
+          name: '/cleanup', 
+          desc: 'Nettoyer les licences expirées',
+          usage: '/cleanup days:30'
+        }
       ]
     }
   };
@@ -977,17 +1069,32 @@ async function handleHelpCommand(interaction) {
   if (!cat) {
     return interaction.reply({
       content: '❌ Catégorie invalide.',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  // ✅ Vérifier si l'utilisateur a le droit d'accéder à cette catégorie
+  if (cat.adminOnly && !ADMIN_USER_IDS.includes(interaction.user.id)) {
+    return interaction.reply({
+      content: '❌ Cette section est réservée aux administrateurs.',
+      flags: MessageFlags.Ephemeral
     });
   }
 
   const embed = new EmbedBuilder()
     .setColor(cat.color)
-    .setTitle(cat.title)
-    .setDescription(
-      cat.commands.map(cmd => `**${cmd.name}**\n└ ${cmd.desc}`).join('\n\n')
-    );
+    .setTitle(cat.title);
 
+  // ✅ Afficher les commandes avec usage
+  if (cat.commands) {
+    const description = cat.commands.map(cmd => 
+      `**${cmd.name}**\n${cmd.desc}\n\`${cmd.usage}\``
+    ).join('\n\n');
+    
+    embed.setDescription(description);
+  }
+
+  // ✅ Ajouter liens si présents
   if (cat.links) {
     embed.addFields({
       name: '🔗 Liens Utiles',
@@ -995,11 +1102,17 @@ async function handleHelpCommand(interaction) {
     });
   }
 
+  // ✅ Footer avec badge admin
+  embed.setFooter({ 
+    text: cat.adminOnly ? '👑 Commande réservée aux administrateurs' : '👤 Disponible pour tous'
+  });
+
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }
+
 
 // ✅ HANDLER SELECT MENU
 client.on('interactionCreate', async (interaction) => {
