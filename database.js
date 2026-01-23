@@ -27,7 +27,7 @@ const licenseSchema = new mongoose.Schema({
   
   status: {
     type: String,
-    enum: ['active', 'revoked', 'expired'],
+    enum: ['active', 'revoked', 'expired','suspended'],
     default: 'active',
     index: true
   },
@@ -256,72 +256,42 @@ async function createLicense(userId, username, options = {}) {
   return license;
 }
 
-// Vérifier une licence
-async function verifyLicense(key, ipAddress, discordUserId, isRealUsage = false) {
+async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
   try {
-    // ✅ VÉRIFICATION : Discord User ID obligatoire
-    if (!discordUserId) {
-      await Log.create({
-        licenseKey: key,
-        action: 'verify',
-        ip: ipAddress,
-        discordUserId: null,
-        success: false,
-        error: 'Discord User ID required'
-      });
-      return { 
-        valid: false, 
-        error: 'Discord User ID requis pour utiliser cette licence' 
-      };
-    }
-    
     const license = await License.findOne({ key });
     
     if (!license) {
       await Log.create({
         licenseKey: key,
-        action: 'verify',
-        ip: ipAddress,
-        discordUserId: discordUserId,
+        action: 'VERIFY_FAILED',
         success: false,
-        error: 'License not found'
+        ip: ip,
+        discordUserId: discordUserId,
+        error: 'Licence introuvable'
       });
       return { valid: false, error: 'Licence introuvable' };
     }
     
-    if (!license.isValid()) {
+    // Vérifier Discord User ID
+    if (!discordUserId) {
       await Log.create({
         licenseKey: key,
-        action: 'verify',
-        ip: ipAddress,
-        discordUserId: discordUserId,
+        action: 'VERIFY_FAILED',
         success: false,
-        error: `Status: ${license.status}`
+        ip: ip,
+        error: 'Discord User ID manquant'
       });
-      
-      if (license.status === 'expired') {
-        const expiredDate = new Date(license.expiresAt).toLocaleDateString('fr-FR');
-        return { 
-          valid: false, 
-          error: `Licence expirée le ${expiredDate}` 
-        };
-      }
-      
-      return { 
-        valid: false, 
-        error: license.status === 'revoked' ? 'Licence révoquée' : 'Licence expirée' 
-      };
+      return { valid: false, error: 'Discord User ID requis' };
     }
     
-    // ✅ VÉRIFICATION STRICTE : Le Discord User ID doit correspondre EXACTEMENT
-    if (license.discordUserId !== discordUserId) {
+    if (license.discordUserId && license.discordUserId !== discordUserId) {
       await Log.create({
         licenseKey: key,
-        action: 'verify',
-        ip: ipAddress,
-        discordUserId: discordUserId,
+        action: 'VERIFY_FAILED',
         success: false,
-        error: `Discord User ID mismatch: expected ${license.discordUserId}, got ${discordUserId}`
+        ip: ip,
+        discordUserId: discordUserId,
+        error: 'Discord User ID incorrect'
       });
       return { 
         valid: false, 
@@ -329,32 +299,193 @@ async function verifyLicense(key, ipAddress, discordUserId, isRealUsage = false)
       };
     }
     
-    // ✅ NOUVEAU : Différencier vérification simple et utilisation réelle
-    try {
-      if (isRealUsage) {
-        // Utilisation réelle (vote réussi)
-        await license.recordUsage(ipAddress, discordUserId);
-        console.log(`✅ [LICENSE] Usage enregistré: ${key}`);
-      } else {
-        // Simple vérification (startup, check périodique)
-        await license.recordVerification(ipAddress, discordUserId);
-        console.log(`🔍 [LICENSE] Vérification: ${key}`);
+    if (!license.discordUserId) {
+      license.discordUserId = discordUserId;
+    }
+    
+    // ========== SYSTÈME ANTI-PARTAGE PROGRESSIF ==========
+    
+    const currentIPCount = license.ipAddresses.length;
+    const isNewIP = !license.ipAddresses.includes(ip);
+    
+    if (isNewIP) {
+      const newIPCount = currentIPCount + 1;
+      
+      // 🟢 Niveau 1 : OK (0-2 IPs)
+      if (newIPCount <= 2) {
+        license.ipAddresses.push(ip);
+        console.log(`✅ [SECURITY] Licence ${key} - IP ajoutée (${newIPCount}/2)`);
+        
+        await Log.create({
+          licenseKey: key,
+          action: 'IP_ADDED',
+          success: true,
+          ip: ip,
+          discordUserId: discordUserId,
+          error: null
+        });
       }
-    } catch (error) {
+      
+      // 🟡 Niveau 2 : Avertissement (3 IPs)
+      else if (newIPCount === 3) {
+        license.ipAddresses.push(ip);
+        console.log(`⚠️ [SECURITY] Licence ${key} - AVERTISSEMENT (3 IPs)`);
+        
+        await Log.create({
+          licenseKey: key,
+          action: 'IP_WARNING',
+          success: true,
+          ip: ip,
+          discordUserId: discordUserId,
+          error: '3 IPs détectées - surveillance active'
+        });
+        
+        // Alerte admin Discord
+        await sendSecurityAlert({
+          level: 'warning',
+          license: license,
+          message: `3 IPs différentes détectées`,
+          ips: license.ipAddresses
+        });
+      }
+      
+      // 🟠 Niveau 3 : Suspension temporaire (4-5 IPs)
+      else if (newIPCount >= 4 && newIPCount <= 5) {
+        console.log(`🚫 [SECURITY] Licence ${key} - SUSPENDUE (${newIPCount} IPs)`);
+        
+        license.status = 'suspended';
+        license.suspendedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+        await license.save();
+        
+        await Log.create({
+          licenseKey: key,
+          action: 'LICENSE_SUSPENDED',
+          success: false,
+          ip: ip,
+          discordUserId: discordUserId,
+          error: `${newIPCount} IPs détectées - suspension 24h`
+        });
+        
+        // Alerte admin Discord
+        await sendSecurityAlert({
+          level: 'urgent',
+          license: license,
+          message: `Licence SUSPENDUE - ${newIPCount} IPs détectées`,
+          ips: [...license.ipAddresses, ip]
+        });
+        
+        return { 
+          valid: false, 
+          error: 'Licence suspendue pour activité suspecte (24h). Contactez le support si légitime.' 
+        };
+      }
+      
+      // 🔴 Niveau 4 : Révocation définitive (6+ IPs)
+      else {
+        console.log(`❌ [SECURITY] Licence ${key} - RÉVOQUÉE (${newIPCount} IPs)`);
+        
+        license.status = 'revoked';
+        await license.save();
+        
+        await Log.create({
+          licenseKey: key,
+          action: 'LICENSE_REVOKED',
+          success: false,
+          ip: ip,
+          discordUserId: discordUserId,
+          error: `${newIPCount} IPs - Partage confirmé`
+        });
+        
+        // Alerte admin Discord
+        await sendSecurityAlert({
+          level: 'critical',
+          license: license,
+          message: `Licence RÉVOQUÉE - ${newIPCount} IPs (partage confirmé)`,
+          ips: [...license.ipAddresses, ip]
+        });
+        
+        return { 
+          valid: false, 
+          error: 'Licence révoquée pour partage détecté. Non remboursable.' 
+        };
+      }
+    }
+    
+    // Vérifier si suspendue
+    if (license.status === 'suspended') {
+      if (license.suspendedUntil && license.suspendedUntil > new Date()) {
+        const hoursLeft = Math.ceil((license.suspendedUntil - new Date()) / (1000 * 60 * 60));
+        
+        await Log.create({
+          licenseKey: key,
+          action: 'VERIFY_SUSPENDED',
+          success: false,
+          ip: ip,
+          discordUserId: discordUserId,
+          error: `Suspension active - ${hoursLeft}h restantes`
+        });
+        
+        return { 
+          valid: false, 
+          error: `Licence suspendue. Réactivation dans ${hoursLeft}h ou contactez le support.` 
+        };
+      } else {
+        // Fin de suspension automatique
+        license.status = 'active';
+        console.log(`✅ [SECURITY] Licence ${key} - Suspension levée automatiquement`);
+        
+        await Log.create({
+          licenseKey: key,
+          action: 'SUSPENSION_LIFTED',
+          success: true,
+          ip: ip,
+          discordUserId: discordUserId,
+          error: null
+        });
+      }
+    }
+    
+    // ========== FIN SYSTÈME ANTI-PARTAGE ==========
+    
+    // Vérifier statut de base
+    if (!license.isValid()) {
+      await Log.create({
+        licenseKey: key,
+        action: 'VERIFY_FAILED',
+        success: false,
+        ip: ip,
+        discordUserId: discordUserId,
+        error: `Statut: ${license.status}`
+      });
+      
       return { 
         valid: false, 
-        error: 'Erreur lors de l\'enregistrement' 
+        error: license.status === 'expired' ? 'Licence expirée' : 'Licence invalide'
       };
     }
     
+    // Mettre à jour statistiques
+    if (isRealUsage) {
+      license.usageCount++;
+      license.lastUsed = new Date();
+    } else {
+      license.verificationCount++;
+      license.lastVerified = new Date();
+    }
+    
+    await license.save();
+    
+    // Log succès
     await Log.create({
       licenseKey: key,
-      action: isRealUsage ? 'usage' : 'verify',
-      ip: ipAddress,
+      action: isRealUsage ? 'USAGE' : 'VERIFICATION',
+      success: true,
+      ip: ip,
       discordUserId: discordUserId,
-      success: true
+      error: null
     });
     
+    // Calculer jours restants
     const daysRemaining = Math.ceil((license.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
     
     return {
@@ -363,17 +494,16 @@ async function verifyLicense(key, ipAddress, discordUserId, isRealUsage = false)
         key: license.key,
         username: license.username,
         discordUserId: license.discordUserId,
+        status: license.status,
         expiresAt: license.expiresAt,
-        lastUsed: license.lastUsed,
-        lastVerified: license.lastVerified,
         daysRemaining: daysRemaining,
-        usageCount: license.usageCount,  // ✅ Nombre de votes
-        verificationCount: license.verificationCount  // ✅ Nombre de vérifications
+        usageCount: license.usageCount,
+        verificationCount: license.verificationCount
       }
     };
     
   } catch (error) {
-    console.error('❌ [LICENSE] Erreur vérification:', error);
+    console.error('❌ [VERIFY] Erreur:', error);
     return { valid: false, error: 'Erreur serveur' };
   }
 }
@@ -437,15 +567,66 @@ async function getStats() {
     recentActivity: recentLogs
   };
 }
+// ========== ALERTES SÉCURITÉ ==========
 
-// ========== EXPORTS ==========
+async function sendSecurityAlert({ level, license, message, ips }) {
+  // Vérifier que le webhook admin est configuré
+  if (!process.env.ADMIN_WEBHOOK_URL) {
+    console.warn('⚠️ [ALERT] ADMIN_WEBHOOK_URL non configuré');
+    return;
+  }
+  
+  const colors = {
+    warning: 0xf59e0b,   // Orange
+    urgent: 0xef4444,    // Rouge
+    critical: 0x991b1b   // Rouge foncé
+  };
+  
+  const emojis = {
+    warning: '⚠️',
+    urgent: '🚫',
+    critical: '❌'
+  };
+  
+  try {
+    await fetch(process.env.ADMIN_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        embeds: [{
+          title: `${emojis[level]} Alerte Sécurité - ${level.toUpperCase()}`,
+          description: message,
+          color: colors[level],
+          fields: [
+            { name: 'Clé', value: `\`${license.key}\``, inline: true },
+            { name: 'User', value: `<@${license.discordUserId}>`, inline: true },
+            { name: 'Username', value: license.username, inline: true },
+            { name: 'IPs détectées', value: ips.slice(0, 10).map(ip => `\`${ip}\``).join('\n') || 'Aucune', inline: false },
+            { name: 'Votes effectués', value: license.usageCount.toString(), inline: true },
+            { name: 'Statut actuel', value: license.status.toUpperCase(), inline: true }
+          ],
+          timestamp: new Date().toISOString(),
+          footer: { text: 'Nemesis Security System' }
+        }]
+      })
+    });
+    
+    console.log(`📢 [ALERT] Alerte ${level} envoyée pour licence ${license.key}`);
+    
+  } catch (error) {
+    console.error('❌ [ALERT] Erreur envoi webhook:', error);
+  }
+}
+
+// Exporter
 module.exports = {
   connectDatabase,
-  License,
-  Log,
-  generateLicenseKey,
   createLicense,
   verifyLicense,
   revokeLicense,
-  getStats
+  getStats,
+  sendSecurityAlert,  // ✅ NOUVEAU
+  License,
+  Log,
+  Backup
 };
