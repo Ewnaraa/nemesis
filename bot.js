@@ -1,7 +1,17 @@
 // ========== BOT.JS - BOT DISCORD + API ==========
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { 
+  Client, 
+  GatewayIntentBits, 
+  EmbedBuilder, 
+  SlashCommandBuilder,
+  ActionRowBuilder,      // ✅ AJOUTER
+  ButtonBuilder,         // ✅ AJOUTER
+  ButtonStyle,           // ✅ AJOUTER
+  StringSelectMenuBuilder // ✅ AJOUTER
+} = require('discord.js');
+
 const express = require('express');
 const cors = require('cors');
 const { connectDatabase, createLicense, verifyLicense, revokeLicense, getStats, License, Log } = require('./database');
