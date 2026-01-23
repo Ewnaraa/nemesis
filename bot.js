@@ -27,6 +27,7 @@ const {
 // ========== CONFIGURATION ==========
 const ADMIN_IDS = process.env.ADMIN_IDS?.split(',') || [];
 const PREMIUM_ROLE_NAME = '👑 Premium';
+const LOGS_CHANNEL_ID = '1464405330531193078';
 
 // ========== DISCORD CLIENT ==========
 const client = new Client({
@@ -88,12 +89,12 @@ app.get('/', (req, res) => {
 // Vérifier une licence
 app.post('/api/verify', async (req, res) => {
   const { key, discordUserId, isRealUsage } = req.body;
-// ✅ Récupérer la vraie IP (pas celle de Railway)
-const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
-           req.headers['x-real-ip'] || 
-           req.ip;
-
-console.log('[API] [VERIFY] IP réelle:', ip);
+  
+  // ✅ Récupérer la vraie IP (pas celle de Railway)
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+             req.headers['x-real-ip'] || 
+             req.ip;
+  console.log('[API] [VERIFY] IP réelle:', ip);
   
   if (!key) {
     return res.status(400).json({ valid: false, error: 'Clé requise' });
@@ -107,6 +108,28 @@ console.log('[API] [VERIFY] IP réelle:', ip);
   console.log(`[API] ${usageType} Licence: ${key} depuis ${ip} (Discord: ${discordUserId})`);
   
   const result = await verifyLicense(key, ip, discordUserId, isRealUsage || false);
+  
+  // ✅ AJOUTE ICI - Logs Discord après vérification
+  if (result.valid && isRealUsage) {
+    // Vote réussi
+    await sendLogToChannel('success', `Vote réussi`, {
+      user: result.license.username,
+      fields: [
+        { name: 'Clé', value: `\`${key.substring(0, 9)}...\``, inline: true },
+        { name: 'Total Votes', value: `${result.license.usageCount}`, inline: true },
+        { name: 'IP', value: ip, inline: true }
+      ]
+    });
+  } else if (!result.valid) {
+    // Vote échoué
+    await sendLogToChannel('error', `Vote échoué`, {
+      fields: [
+        { name: 'Clé', value: `\`${key.substring(0, 9)}...\``, inline: true },
+        { name: 'Erreur', value: result.error, inline: true },
+        { name: 'Discord ID', value: discordUserId, inline: true }
+      ]
+    });
+  }
   
   res.json(result);
 });
@@ -1190,7 +1213,15 @@ async function handleGenerateCommand(interaction) {
         { name: '📅 Expire le', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`, inline: true }
       )
       .setTimestamp();
-    
+     await sendLogToChannel('success', `Nouvelle licence générée`, {
+  user: interaction.user.username,
+  avatar: interaction.user.displayAvatarURL(),
+  fields: [
+    { name: 'Clé', value: `\`${key}\``, inline: true },
+    { name: 'Utilisateur', value: username, inline: true },
+    { name: 'Expire', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }
+  ]
+});
     await interaction.reply({ embeds: [embed], ephemeral: true });
     
   } catch (error) {
@@ -1258,6 +1289,14 @@ async function handleRevokeCommand(interaction) {
     )
     .setTimestamp();
   
+  await sendLogToChannel('warning', `Licence révoquée`, {
+      user: interaction.user.username,
+      avatar: interaction.user.displayAvatarURL(),
+      fields: [
+        { name: 'Clé', value: `\`${key}\``, inline: true },
+        { name: 'Raison', value: reason || 'Non spécifiée', inline: true }
+      ]
+    });
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
@@ -1984,6 +2023,46 @@ async function handleCleanupCommand(interaction) {
   }
 }
 
+async function sendLogToChannel(type, message, data = {}) {
+  try {
+    const channel = await client.channels.fetch(LOGS_CHANNEL_ID);
+    if (!channel) return;
+
+    const colors = {
+      success: '#10b981',
+      error: '#ef4444',
+      warning: '#f59e0b',
+      info: '#6366f1'
+    };
+
+    const emojis = {
+      success: '✅',
+      error: '❌',
+      warning: '⚠️',
+      info: 'ℹ️'
+    };
+
+    const embed = new EmbedBuilder()
+      .setColor(colors[type] || '#6366f1')
+      .setDescription(`${emojis[type]} ${message}`)
+      .setTimestamp();
+
+    if (data.user) {
+      embed.setAuthor({
+        name: data.user,
+        iconURL: data.avatar || null
+      });
+    }
+
+    if (data.fields) {
+      embed.addFields(data.fields);
+    }
+
+    await channel.send({ embeds: [embed] });
+  } catch (error) {
+    console.error('[LOGS] Erreur envoi:', error);
+  }
+}
 // ========== HANDLERS PARRAINAGE ==========
 
 async function handleReferralCommand(interaction) {
@@ -2095,6 +2174,52 @@ async function start() {
   }
   
   await client.login(process.env.DISCORD_TOKEN);
+
+  // ✅ CRON JOB - Vérifier les licences expirées toutes les heures
+setInterval(async () => {
+  try {
+    const now = new Date();
+    
+    // Trouver licences qui viennent d'expirer (dans la dernière heure)
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    
+    const expiredLicenses = await License.find({
+      status: 'active',
+      expiresAt: {
+        $gte: oneHourAgo,
+        $lt: now
+      }
+    });
+
+    for (const license of expiredLicenses) {
+      // Marquer comme expirée
+      license.status = 'expired';
+      await license.save();
+
+      // Logger
+      console.log(`[CRON] Licence expirée: ${license.key}`);
+
+      // Envoyer notification Discord
+      await sendLogToChannel('error', `Licence expirée`, {
+        user: license.username,
+        fields: [
+          { name: 'Clé', value: `\`${license.key}\``, inline: true },
+          { name: 'Discord ID', value: license.discordUserId, inline: true },
+          { name: 'Votes Effectués', value: `${license.usageCount}`, inline: true }
+        ]
+      });
+    }
+
+    if (expiredLicenses.length > 0) {
+      console.log(`[CRON] ${expiredLicenses.length} licence(s) expirée(s) traitée(s)`);
+    }
+
+  } catch (error) {
+    console.error('[CRON] Erreur vérification licences expirées:', error);
+  }
+}, 60 * 60 * 1000); // ✅ Toutes les heures
+
+console.log('[CRON] Job de vérification des licences expirées activé (toutes les heures)');
   
   client.once('ready', async () => {
     console.log(`✅ [DISCORD] Connecté: ${client.user.tag}`);
