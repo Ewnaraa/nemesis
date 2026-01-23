@@ -415,6 +415,38 @@ new SlashCommandBuilder()
       .setDescription('Utilisateur Discord')
       .setRequired(false)
   ),
+  new SlashCommandBuilder()
+  .setName('unsuspend')
+  .setDescription('[ADMIN] Lever la suspension d\'une licence')
+  .addStringOption(option =>
+    option
+      .setName('key')
+      .setDescription('Clé de licence')
+      .setRequired(false)
+  )
+  .addUserOption(option =>
+    option
+      .setName('user')
+      .setDescription('Utilisateur Discord')
+      .setRequired(false)
+  ),
+
+// ✅ AJOUTER CETTE COMMANDE ICI
+new SlashCommandBuilder()
+  .setName('reset-ips')
+  .setDescription('[ADMIN] Réinitialiser les IPs d\'une licence')
+  .addStringOption(option =>
+    option
+      .setName('key')
+      .setDescription('Clé de licence')
+      .setRequired(false)
+  )
+  .addUserOption(option =>
+    option
+      .setName('user')
+      .setDescription('Utilisateur Discord')
+      .setRequired(false)
+  ),
   
 ];
 
@@ -445,7 +477,7 @@ client.on('interactionCreate', async (interaction) => {
   
   // Vérifier si admin pour commandes admin
   const isAdmin = ADMIN_IDS.includes(user.id);
-  const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink', 'extend', 'userinfo', 'userlogs', 'licenses', 'cleanup'];
+  const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink', 'extend', 'userinfo', 'userlogs', 'licenses', 'cleanup', 'reset-ips'];
   
   if (adminCommands.includes(commandName) && !isAdmin) {
     return interaction.reply({
@@ -525,6 +557,10 @@ client.on('interactionCreate', async (interaction) => {
         case 'unsuspend':
   await handleUnsuspendCommand(interaction);
   break;
+// ✅ AJOUTER CE CASE ICI
+case 'reset-ips':
+  await handleResetIpsCommand(interaction);
+  break;
     }
   } catch (error) {
     console.error(`❌ [COMMAND] Erreur ${commandName}:`, error);
@@ -536,6 +572,63 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ========== HANDLERS DES COMMANDES ==========
+async function handleResetIpsCommand(interaction) {
+  const key = interaction.options.getString('key');
+  const user = interaction.options.getUser('user');
+  
+  if (!key && !user) {
+    return interaction.reply({
+      content: '❌ Vous devez fournir soit une clé, soit un utilisateur.',
+      ephemeral: true
+    });
+  }
+  
+  let license;
+  
+  if (user) {
+    license = await License.findOne({ discordUserId: user.id });
+  } else {
+    license = await License.findOne({ key });
+  }
+  
+  if (!license) {
+    return interaction.reply({
+      content: '❌ Licence introuvable',
+      ephemeral: true
+    });
+  }
+  
+  const oldIPCount = license.ipAddresses.length;
+  
+  // Réinitialiser les IPs
+  license.ipAddresses = [];
+  await license.save();
+  
+  await Log.create({
+    licenseKey: license.key,
+    action: 'IP_RESET',
+    success: true,
+    discordUserId: license.discordUserId,
+    error: `Reset par admin - ${oldIPCount} IPs supprimées`
+  });
+  
+  console.log(`🧹 [RESET-IPS] Licence ${license.key} - ${oldIPCount} IPs supprimées par ${interaction.user.tag}`);
+  
+  const embed = new EmbedBuilder()
+    .setColor(0x10b981)
+    .setTitle('🧹 IPs Réinitialisées')
+    .setDescription('Les adresses IP ont été réinitialisées avec succès')
+    .addFields(
+      { name: 'Clé', value: `\`${license.key}\``, inline: true },
+      { name: 'User', value: `<@${license.discordUserId}>`, inline: true },
+      { name: 'IPs supprimées', value: oldIPCount.toString(), inline: true }
+    )
+    .setFooter({ text: 'La licence peut maintenant être utilisée normalement' })
+    .setTimestamp();
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
 async function handleUnsuspendCommand(interaction) {
   const key = interaction.options.getString('key');
   const user = interaction.options.getUser('user');
