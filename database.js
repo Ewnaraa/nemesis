@@ -175,7 +175,8 @@ const logSchema = new mongoose.Schema({
       'SUSPENSION_LIFTED',
       'VERIFICATION',
       'USAGE',
-      'REACTIVATED'
+      'REACTIVATED',
+      'IP_RESET'
     ],
     required: true
   },
