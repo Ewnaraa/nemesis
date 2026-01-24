@@ -158,6 +158,87 @@ if (result.valid && isRealUsage) {
   
   res.json(result);
 });
+
+// ==================== WEBHOOK PAYPAL ====================
+app.post('/webhook/paypal', async (req, res) => {
+  try {
+    console.log('[PAYPAL] 📩 Webhook reçu:', req.body);
+    
+    // TODO: Vérifier signature PayPal (sécurité)
+    
+    const payment = req.body;
+    
+    // Extraire Discord User ID de la note PayPal
+    const discordUserId = payment.note || payment.custom || payment.item_name;
+    
+    if (!discordUserId) {
+      console.error('[PAYPAL] ❌ Pas de Discord User ID dans la note');
+      return res.status(400).send('Missing Discord ID');
+    }
+    
+    const amount = parseFloat(payment.mc_gross || payment.amount);
+    
+    if (!amount || amount <= 0) {
+      console.error('[PAYPAL] ❌ Montant invalide:', amount);
+      return res.status(400).send('Invalid amount');
+    }
+    
+    console.log('[PAYPAL] 💰 Paiement:', {
+      discordUserId,
+      amount,
+      txnId: payment.txn_id
+    });
+    
+    // Créditer le solde
+    const newBalance = await addBalance(
+      discordUserId,
+      amount,
+      'Recharge PayPal',
+      payment.txn_id
+    );
+    
+    console.log('[PAYPAL] ✅ Solde crédité:', newBalance);
+    
+    // Notifier l'user sur Discord
+    try {
+      const user = await client.users.fetch(discordUserId);
+      
+      const embed = new EmbedBuilder()
+        .setColor('#10b981')
+        .setTitle('✅ Rechargement confirmé')
+        .setDescription(`Votre solde a été crédité de **${amount.toFixed(2)}€**`)
+        .addFields(
+          { name: '💰 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
+          { name: '🔢 Transaction', value: payment.txn_id || 'N/A', inline: true }
+        )
+        .setFooter({ text: 'Nemesis Vote • Système de paiement' })
+        .setTimestamp();
+      
+      await user.send({ embeds: [embed] });
+      
+      console.log('[PAYPAL] 📨 User notifié');
+      
+    } catch (error) {
+      console.error('[PAYPAL] ❌ Erreur notification user:', error);
+    }
+    
+    // Log admin
+    await sendLogToChannel('success', `Rechargement PayPal reçu`, {
+      fields: [
+        { name: '👤 Utilisateur', value: `<@${discordUserId}>`, inline: true },
+        { name: '💰 Montant', value: `${amount.toFixed(2)}€`, inline: true },
+        { name: '💳 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
+        { name: '🔢 Transaction', value: payment.txn_id || 'N/A', inline: false }
+      ]
+    });
+    
+    res.status(200).send('OK');
+    
+  } catch (error) {
+    console.error('[PAYPAL] ❌ Erreur webhook:', error);
+    res.status(500).send('Error');
+  }
+});
 // Enregistrer un parrainage
 app.post('/api/referral/record', async (req, res) => {
   const { referrerCode, referredUserId, referredUsername } = req.body;
@@ -231,7 +312,7 @@ const commands = [
  
   new SlashCommandBuilder()
   .setName('shop')
-  .setDescription('💎 Boutique Nemesis - Recharger solde et acheter licences')
+  .setDescription('💎 Boutique Nemesis - Recharger solde et acheter licences'),
   // Commande /license
   new SlashCommandBuilder()
     .setName('license')
@@ -788,40 +869,391 @@ case 'reset-ips':
 });
 
 // ========== HANDLERS DES COMMANDES ==========
-async function handleShopCommand(interaction) {
+// ==================== HANDLER MENU RECHARGE ====================
+async function handleRechargeMenu(interaction) {
   try {
     const balance = await getBalance(interaction.user.id);
     
     const embed = new EmbedBuilder()
-      .setColor('#6366f1')
-      .setTitle('💎 NEMESIS SHOP')
-      .setDescription(`💰 **Votre solde actuel :** ${balance.toFixed(2)}€\n\nSélectionnez une action ci-dessous`)
-      .setFooter({ text: 'Nemesis Vote • Shop' })
+      .setColor('#10b981')
+      .setTitle('💳 RECHARGEMENT DE SOLDE')
+      .setDescription(`💰 **Solde actuel :** ${balance.toFixed(2)}€\n\nSélectionnez un montant à recharger`)
+      .setFooter({ text: 'Nemesis Vote • Rechargement' })
       .setTimestamp();
     
     const menu = new StringSelectMenuBuilder()
-      .setCustomId('shop_menu')
-      .setPlaceholder('Sélectionnez une action...')
-      .addOptions([
-        {
-          label: 'Recharger mon solde',
-          description: 'Ajouter des fonds via PayPal',
-          value: 'recharge',
-          emoji: '💳'
+      .setCustomId('recharge_amount_menu')
+      .setPlaceholder('Montant à recharger...')
+      .addOptions(
+        RECHARGE_AMOUNTS.map(amount => ({
+          label: `${amount}€`,
+          description: `Recharger ${amount}€ via PayPal`,
+          value: amount.toString(),
+          emoji: '💵'
+        }))
+      );
+    
+    const row = new ActionRowBuilder().addComponents(menu);
+    
+    await interaction.update({ 
+      embeds: [embed], 
+      components: [row]
+    });
+    
+  } catch (error) {
+    console.error('[RECHARGE] Erreur menu:', error);
+    await interaction.update({
+      content: '❌ Erreur lors du chargement du menu.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+// ==================== HANDLER CONFIRMATION RECHARGE ====================
+async function handleRechargeConfirm(interaction, amount) {
+  try {
+    const expiresAt = await createPendingRecharge(interaction.user.id, amount);
+    
+    const embed = new EmbedBuilder()
+      .setColor('#f59e0b')
+      .setTitle(`💰 Rechargement de ${amount.toFixed(2)}€`)
+      .setDescription('**Instructions de paiement PayPal**')
+      .addFields(
+        { 
+          name: '📧 Email PayPal', 
+          value: '`voteno0zly@outlook.com`', 
+          inline: false 
         },
-        {
-          label: 'Acheter une licence',
-          description: 'Acheter une licence avec votre solde',
-          value: 'buy',
-          emoji: '🛒'
+        { 
+          name: '🔢 ID à mettre dans la note de paiement', 
+          value: `\`${interaction.user.id}\``, 
+          inline: false 
         },
-        {
-          label: 'Voir mon historique',
-          description: 'Historique de vos transactions',
-          value: 'history',
-          emoji: '📊'
+        { 
+          name: '💶 Montant exact', 
+          value: `**${amount.toFixed(2)}€**`, 
+          inline: true 
+        },
+        { 
+          name: '⏰ Expire dans', 
+          value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, 
+          inline: true 
         }
-      ]);
+      )
+      .setFooter({ text: '⚠️ N\'oubliez pas de mettre votre ID dans la note de paiement !' })
+      .setTimestamp();
+    
+    const buttons = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('recharge_sent')
+          .setLabel('✅ J\'ai envoyé le paiement')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('recharge_cancel')
+          .setLabel('❌ Annuler')
+          .setStyle(ButtonStyle.Danger)
+      );
+    
+    await interaction.update({ 
+      embeds: [embed], 
+      components: [buttons]
+    });
+    
+  } catch (error) {
+    console.error('[RECHARGE] Erreur confirmation:', error);
+    await interaction.update({
+      content: '❌ Erreur lors de la création de la recharge.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+// ==================== HANDLER MENU ACHAT ====================
+async function handleBuyMenu(interaction) {
+  try {
+    const balance = await getBalance(interaction.user.id);
+    
+    const embed = new EmbedBuilder()
+      .setColor('#8b5cf6')
+      .setTitle('🛒 ACHETER UNE LICENCE')
+      .setDescription(`💰 **Votre solde :** ${balance.toFixed(2)}€\n\nSélectionnez la durée de votre licence`)
+      .setFooter({ text: 'Nemesis Vote • Achat de licence' })
+      .setTimestamp();
+    
+    const options = [
+      {
+        days: 30,
+        price: LICENSE_PRICES[30],
+        discount: null
+      },
+      {
+        days: 90,
+        price: LICENSE_PRICES[90],
+        discount: '-20%'
+      },
+      {
+        days: 180,
+        price: LICENSE_PRICES[180],
+        discount: '-33%'
+      },
+      {
+        days: 365,
+        price: LICENSE_PRICES[365],
+        discount: '-42%'
+      }
+    ];
+    
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('buy_duration_menu')
+      .setPlaceholder('Durée de la licence...')
+      .addOptions(
+        options.map(opt => {
+          const label = opt.discount 
+            ? `${opt.days} jours - ${opt.price.toFixed(2)}€ (${opt.discount})`
+            : `${opt.days} jours - ${opt.price.toFixed(2)}€`;
+          
+          const canAfford = balance >= opt.price;
+          
+          return {
+            label: label,
+            description: canAfford ? 'Vous pouvez acheter cette licence' : '❌ Solde insuffisant',
+            value: opt.days.toString(),
+            emoji: '📅'
+          };
+        })
+      );
+    
+    const row = new ActionRowBuilder().addComponents(menu);
+    
+    await interaction.update({ 
+      embeds: [embed], 
+      components: [row]
+    });
+    
+  } catch (error) {
+    console.error('[BUY] Erreur menu:', error);
+    await interaction.update({
+      content: '❌ Erreur lors du chargement du menu.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+// ==================== HANDLER CONFIRMATION ACHAT ====================
+async function handleBuyConfirm(interaction, days) {
+  try {
+    const balance = await getBalance(interaction.user.id);
+    const price = LICENSE_PRICES[days];
+    
+    if (balance < price) {
+      return await interaction.update({
+        content: `❌ Solde insuffisant. Vous avez ${balance.toFixed(2)}€ mais cette licence coûte ${price.toFixed(2)}€.`,
+        embeds: [],
+        components: []
+      });
+    }
+    
+    const newBalance = balance - price;
+    
+    const embed = new EmbedBuilder()
+      .setColor('#8b5cf6')
+      .setTitle('✅ CONFIRMATION D\'ACHAT')
+      .setDescription('**Récapitulatif de votre achat**')
+      .addFields(
+        { 
+          name: '📅 Licence', 
+          value: `${days} jours`, 
+          inline: true 
+        },
+        { 
+          name: '💰 Prix', 
+          value: `${price.toFixed(2)}€`, 
+          inline: true 
+        },
+        { 
+          name: '💳 Solde actuel', 
+          value: `${balance.toFixed(2)}€`, 
+          inline: true 
+        },
+        { 
+          name: '📊 Nouveau solde', 
+          value: `${newBalance.toFixed(2)}€`, 
+          inline: true 
+        }
+      )
+      .setFooter({ text: 'Nemesis Vote • Confirmation d\'achat' })
+      .setTimestamp();
+    
+    const buttons = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`buy_confirm_${days}`)
+          .setLabel('✅ Confirmer l\'achat')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('buy_cancel')
+          .setLabel('❌ Annuler')
+          .setStyle(ButtonStyle.Danger)
+      );
+    
+    await interaction.update({ 
+      embeds: [embed], 
+      components: [buttons]
+    });
+    
+  } catch (error) {
+    console.error('[BUY] Erreur confirmation:', error);
+    await interaction.update({
+      content: '❌ Erreur lors de la confirmation.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+// ==================== HANDLER ACHAT FINAL ====================
+async function handleBuyFinal(interaction, days) {
+  try {
+    const price = LICENSE_PRICES[days];
+    const balance = await getBalance(interaction.user.id);
+    
+    if (balance < price) {
+      return await interaction.update({
+        content: `❌ Solde insuffisant.`,
+        embeds: [],
+        components: []
+      });
+    }
+    
+    // Générer la licence
+    const { createLicense } = require('./database');
+    const license = await createLicense(interaction.user.id, days);
+    
+    // Débiter le solde
+    const newBalance = await deductBalance(
+      interaction.user.id, 
+      price, 
+      `Achat licence ${days} jours`,
+      license.key
+    );
+    
+    const embed = new EmbedBuilder()
+      .setColor('#10b981')
+      .setTitle('✅ ACHAT RÉUSSI !')
+      .setDescription('**Votre licence a été générée avec succès**')
+      .addFields(
+        { 
+          name: '🔑 Clé de licence', 
+          value: `\`${license.key}\``, 
+          inline: false 
+        },
+        { 
+          name: '📅 Durée', 
+          value: `${days} jours`, 
+          inline: true 
+        },
+        { 
+          name: '📆 Expire le', 
+          value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:D>`, 
+          inline: true 
+        },
+        { 
+          name: '💰 Nouveau solde', 
+          value: `${newBalance.toFixed(2)}€`, 
+          inline: true 
+        }
+      )
+      .setFooter({ text: 'Nemesis Vote • Merci pour votre achat !' })
+      .setTimestamp();
+    
+    await interaction.update({ 
+      embeds: [embed], 
+      components: []
+    });
+    
+    // Log admin
+    await sendLogToChannel('success', `Achat de licence via le shop`, {
+      fields: [
+        { name: '👤 Utilisateur', value: `<@${interaction.user.id}>`, inline: true },
+        { name: '📅 Durée', value: `${days} jours`, inline: true },
+        { name: '💰 Prix', value: `${price.toFixed(2)}€`, inline: true },
+        { name: '🔑 Clé', value: license.key, inline: false }
+      ]
+    });
+    
+  } catch (error) {
+    console.error('[BUY] Erreur achat final:', error);
+    await interaction.update({
+      content: '❌ Erreur lors de l\'achat. Contactez un administrateur.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+// ==================== HANDLER HISTORIQUE ====================
+async function handleHistoryMenu(interaction) {
+  try {
+    const transactions = await getTransactionHistory(interaction.user.id, 10);
+    const balance = await getBalance(interaction.user.id);
+    
+    if (transactions.length === 0) {
+      const embed = new EmbedBuilder()
+        .setColor('#6366f1')
+        .setTitle('📊 HISTORIQUE DES TRANSACTIONS')
+        .setDescription('Aucune transaction pour le moment.')
+        .addFields({ 
+          name: '💰 Solde actuel', 
+          value: `${balance.toFixed(2)}€`, 
+          inline: true 
+        })
+        .setFooter({ text: 'Nemesis Vote • Historique' })
+        .setTimestamp();
+      
+      return await interaction.update({ 
+        embeds: [embed], 
+        components: []
+      });
+    }
+    
+    const historyText = transactions.map(tx => {
+      const emoji = tx.type === 'credit' ? '✅' : '❌';
+      const sign = tx.type === 'credit' ? '+' : '-';
+      const date = `<t:${Math.floor(tx.timestamp.getTime() / 1000)}:d>`;
+      
+      return `${emoji} ${sign}${tx.amount.toFixed(2)}€ - ${tx.reason} (${date})`;
+    }).join('\n');
+    
+    const embed = new EmbedBuilder()
+      .setColor('#6366f1')
+      .setTitle('📊 HISTORIQUE DES TRANSACTIONS')
+      .setDescription(historyText)
+      .addFields({ 
+        name: '💰 Solde actuel', 
+        value: `${balance.toFixed(2)}€`, 
+        inline: true 
+      })
+      .setFooter({ text: 'Nemesis Vote • Historique (10 dernières transactions)' })
+      .setTimestamp();
+    
+    await interaction.update({ 
+      embeds: [embed], 
+      components: []
+    });
+    
+  } catch (error) {
+    console.error('[HISTORY] Erreur:', error);
+    await interaction.update({
+      content: '❌ Erreur lors du chargement de l\'historique.',
+      embeds: [],
+      components: []
+    });
+  }
+}
     
     const row = new ActionRowBuilder().addComponents(menu);
     
@@ -1475,8 +1907,77 @@ async function handleHelpCommand(interaction) {
 
 
 // ✅ HANDLER SELECT MENU
+// ==================== HANDLER SELECT MENUS ====================
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.isStringSelectMenu()) {
+    
+    // Menu principal shop
+    if (interaction.customId === 'shop_menu') {
+      const choice = interaction.values[0];
+      
+      switch (choice) {
+        case 'recharge':
+          await handleRechargeMenu(interaction);
+          break;
+        case 'buy':
+          await handleBuyMenu(interaction);
+          break;
+        case 'history':
+          await handleHistoryMenu(interaction);
+          break;
+      }
+    }
+    
+    // Menu montant recharge
+    if (interaction.customId === 'recharge_amount_menu') {
+      const amount = parseFloat(interaction.values[0]);
+      await handleRechargeConfirm(interaction, amount);
+    }
+    
+    // Menu durée achat
+    if (interaction.customId === 'buy_duration_menu') {
+      const days = parseInt(interaction.values[0]);
+      await handleBuyConfirm(interaction, days);
+    }
+  }
+  
+  // ==================== HANDLER BUTTONS ====================
+  if (interaction.isButton()) {
+    
+    // Bouton "J'ai envoyé le paiement"
+    if (interaction.customId === 'recharge_sent') {
+      await interaction.update({
+        content: '✅ Parfait ! Dès réception du paiement PayPal, votre solde sera crédité automatiquement.\n\n⏰ Cela peut prendre quelques minutes.',
+        embeds: [],
+        components: []
+      });
+    }
+    
+    // Bouton annuler recharge
+    if (interaction.customId === 'recharge_cancel') {
+      await interaction.update({
+        content: '❌ Rechargement annulé.',
+        embeds: [],
+        components: []
+      });
+    }
+    
+    // Bouton confirmer achat
+    if (interaction.customId.startsWith('buy_confirm_')) {
+      const days = parseInt(interaction.customId.split('_')[2]);
+      await handleBuyFinal(interaction, days);
+    }
+    
+    // Bouton annuler achat
+    if (interaction.customId === 'buy_cancel') {
+      await interaction.update({
+        content: '❌ Achat annulé.',
+        embeds: [],
+        components: []
+      });
+    }
+  }
+});
 
   if (interaction.customId === 'help_menu') {
     const category = interaction.values[0];
@@ -2835,7 +3336,11 @@ console.log('[CRON] Job de vérification des licences expirées activé (toutes 
     } catch (error) {
       console.error('❌ [DISCORD] Erreur enregistrement commandes:', error);
     }
-    
+
+    // Nettoyer les recharges expirées toutes les 5 minutes
+setInterval(async () => {
+  await cleanExpiredRecharges();
+}, 5 * 60 * 1000);
     // Nettoyage automatique des statuts expirés
     try {
       console.log('🧹 [CLEANUP] Vérification des licences expirées...');
