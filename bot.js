@@ -636,7 +636,14 @@ client.on('interactionCreate', async (interaction) => {
         break;
         
       case 'changelog':
-  const versions = ['2.6.1', '2.6.0', '2.5.0', '2.4.0'];
+        // ✅ VÉRIFICATION ADMIN
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    return interaction.reply({
+      content: '❌ Cette commande est réservée aux administrateurs.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+  const versions = ['2.4.0', '2.5.0', '2.6.0','2.6.1'];
   const embeds = [];
   
   for (const version of versions) {
