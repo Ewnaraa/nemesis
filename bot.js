@@ -214,6 +214,15 @@ const commands = [
   new SlashCommandBuilder()
   .setName('mylogs')
   .setDescription('📊 Accéder à vos logs personnels'),
+  new SlashCommandBuilder()
+  .setName('resetlogs')
+  .setDescription('[ADMIN] Reset le channel de logs d\'un utilisateur')
+  .addUserOption(option =>
+    option
+      .setName('user')
+      .setDescription('Utilisateur')
+      .setRequired(true)
+  ),
   
   new SlashCommandBuilder()
   .setName('help')
@@ -658,6 +667,9 @@ client.on('interactionCreate', async (interaction) => {
       case 'licenses':
         await handleLicensesCommand(interaction);
         break;
+        case 'resetlogs':
+  await handleResetLogsCommand(interaction);
+  break;
         
       case 'cleanup':
         await handleCleanupCommand(interaction);
@@ -687,6 +699,37 @@ case 'reset-ips':
 });
 
 // ========== HANDLERS DES COMMANDES ==========
+async function handleResetLogsCommand(interaction) {
+  try {
+    const targetUser = interaction.options.getUser('user');
+    
+    const license = await License.findOne({ 
+      discordUserId: targetUser.id 
+    });
+
+    if (!license) {
+      return interaction.reply({
+        content: '❌ Aucune licence trouvée pour cet utilisateur.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    license.logChannelId = null;
+    await license.save();
+
+    await interaction.reply({
+      content: `✅ Channel de logs reset pour ${targetUser.username}. Ils peuvent utiliser \`/mylogs\` pour le recréer.`,
+      flags: MessageFlags.Ephemeral
+    });
+
+  } catch (error) {
+    console.error('[RESETLOGS] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
 async function handleResetIpsCommand(interaction) {
   const key = interaction.options.getString('key');
   const user = interaction.options.getUser('user');
