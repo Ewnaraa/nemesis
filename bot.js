@@ -6,11 +6,14 @@ const {
   GatewayIntentBits, 
   EmbedBuilder, 
   SlashCommandBuilder,
-  ActionRowBuilder,      // ✅ AJOUTER
-  ButtonBuilder,         // ✅ AJOUTER
-  ButtonStyle,           // ✅ AJOUTER
-  StringSelectMenuBuilder // ✅ AJOUTER
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  MessageFlags,
+  ChannelType // ✅ AJOUTER
 } = require('discord.js');
+
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 
@@ -120,6 +123,7 @@ app.post('/api/verify', async (req, res) => {
         { name: 'IP', value: ip, inline: true }
       ]
     });
+    
   } else if (!result.valid) {
     // Vote échoué
     await sendLogToChannel('error', `Vote échoué`, {
@@ -208,6 +212,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('license')
     .setDescription('Voir votre licence actuelle'),
+  
+  new SlashCommandBuilder()
+  .setName('mylogs')
+  .setDescription('📊 Accéder à vos logs personnels'),
   
   new SlashCommandBuilder()
   .setName('help')
@@ -617,6 +625,10 @@ client.on('interactionCreate', async (interaction) => {
         await handleCheckCommand(interaction);
         break;
         
+        case 'mylogs':
+  await handleMyLogsCommand(interaction);
+  break;
+        
       case 'stats':
         await handleStatsCommand(interaction);
         break;
@@ -734,6 +746,53 @@ async function handleResetIpsCommand(interaction) {
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
+async function handleMyLogsCommand(interaction) {
+  try {
+    const license = await License.findOne({ 
+      discordUserId: interaction.user.id,
+      status: 'active'
+    });
+
+    if (!license) {
+      return interaction.reply({
+        content: '❌ Aucune licence active trouvée.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (!license.logChannelId) {
+      // Essayer de créer le channel si manquant
+      const channel = await createUserLogChannel(interaction.user.id, license.username);
+      
+      if (channel) {
+        license.logChannelId = channel.id;
+        await license.save();
+        
+        return interaction.reply({
+          content: `📊 Votre channel de logs vient d'être créé : <#${channel.id}>`,
+          flags: MessageFlags.Ephemeral
+        });
+      } else {
+        return interaction.reply({
+          content: '⚠️ Impossible de créer votre channel de logs. Contactez un admin.',
+          flags: MessageFlags.Ephemeral
+        });
+      }
+    }
+
+    await interaction.reply({
+      content: `📊 Voici votre channel de logs : <#${license.logChannelId}>`,
+      flags: MessageFlags.Ephemeral
+    });
+
+  } catch (error) {
+    console.error('[MYLOGS] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors de la récupération de vos logs.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
 async function handleUnsuspendCommand(interaction) {
   const key = interaction.options.getString('key');
   const user = interaction.options.getUser('user');
@@ -1154,81 +1213,112 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 async function handleGenerateCommand(interaction) {
-  const targetUser = interaction.options.getUser('user');
-  const duration = interaction.options.getInteger('duration') || 30;
-  
-  const expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
-  
   try {
-    const license = await createLicense(
-      targetUser.id, 
-      targetUser.username, 
-      { 
-        duration: duration,
-        discordUserId: targetUser.id
-      }
-    );
-    
-    // Donner le rôle Premium
-    try {
-      const member = await interaction.guild.members.fetch(targetUser.id);
-      const role = interaction.guild.roles.cache.find(r => r.name === PREMIUM_ROLE_NAME);
-      if (role) {
-        await member.roles.add(role);
-      }
-    } catch (error) {
-      console.error('Erreur ajout rôle:', error);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const username = interaction.options.getString('username');
+    const discordUserId = interaction.options.getString('discord_id');
+    const referralCode = interaction.options.getString('referral_code');
+
+    if (!username || !discordUserId) {
+      return interaction.editReply({
+        content: '❌ Username et Discord User ID requis.',
+        flags: MessageFlags.Ephemeral
+      });
     }
-    
-    // Envoyer DM à l'utilisateur
-    try {
-      const dmEmbed = new EmbedBuilder()
-        .setColor(0x10b981)
-        .setTitle('🎉 Licence générée !')
-        .setDescription(`**Votre licence Auto Vote Bot :**\n\n\`${license.key}\``)
-        .addFields(
-          { name: '⏰ Durée', value: `${duration} jours`, inline: true },
-          { name: '📅 Expire le', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`, inline: true },
-          { name: '\u200B', value: '\u200B', inline: true },
-          { name: '🆔 Discord User ID', value: `**⚠️ IMPORTANT - À COPIER :**\n\`${targetUser.id}\`\n\nCette licence est **automatiquement liée** à votre compte Discord.\nVous **DEVEZ** entrer cet ID lors de l'activation !`, inline: false },
-          { name: '🔥 Installation', value: '1. Installez l\'extension Chrome\n2. Ouvrez le popup d\'activation\n3. Entrez votre clé de licence\n4. **Entrez votre Discord User ID** (obligatoire)\n5. Profitez !', inline: false }
-        )
-        .setFooter({ text: '⚠️ Gardez cette clé ET votre Discord User ID secrets !' })
-        .setTimestamp();
-      
-      await targetUser.send({ embeds: [dmEmbed] });
-    } catch (error) {
-      console.error('Impossible d\'envoyer DM:', error);
+
+    const existingLicense = await License.findOne({
+      discordUserId,
+      status: { $in: ['active', 'suspended'] }
+    });
+
+    if (existingLicense) {
+      return interaction.editReply({
+        content: `❌ Cet utilisateur possède déjà une licence active (\`${existingLicense.key}\`).`,
+        flags: MessageFlags.Ephemeral
+      });
     }
+
+    const key = generateLicenseKey();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const newLicense = await License.create({
+      key,
+      username,
+      discordUserId,
+      expiresAt,
+      status: 'active',
+      activatedAt: new Date(),
+      referralCode: referralCode || null
+    });
+
+    // ✅ CRÉER LE CHANNEL PRIVÉ
+    const userChannel = await createUserLogChannel(discordUserId, username);
     
+    if (userChannel) {
+      newLicense.logChannelId = userChannel.id;
+      await newLicense.save();
+      console.log(`[GENERATE] Channel créé pour ${username}: ${userChannel.id}`);
+    }
+
+    if (referralCode) {
+      try {
+        await fetch(`${process.env.API_URL || 'http://localhost:3000'}/api/referral/record`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            referrerCode: referralCode,
+            referredUserId: discordUserId,
+            referredUsername: username
+          })
+        });
+        console.log(`[GENERATE] Parrainage enregistré pour ${referralCode}`);
+      } catch (error) {
+        console.error('[GENERATE] Erreur enregistrement parrainage:', error);
+      }
+    }
+
+    await Log.create({
+      licenseKey: key,
+      action: 'activate',
+      ip: 'discord-command',
+      timestamp: new Date()
+    });
+
+    // ✅ Log dans channel global
+    await sendLogToChannel('success', `Nouvelle licence générée`, {
+      user: interaction.user.username,
+      avatar: interaction.user.displayAvatarURL(),
+      fields: [
+        { name: 'Clé', value: `\`${key}\``, inline: true },
+        { name: 'Utilisateur', value: username, inline: true },
+        { name: 'Channel', value: userChannel ? `<#${userChannel.id}>` : '❌ Erreur', inline: true },
+        { name: 'Expire', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }
+      ]
+    });
+
     const embed = new EmbedBuilder()
-      .setColor(0x10b981)
-      .setTitle('✅ Licence générée')
+      .setColor('#10b981')
+      .setTitle('✅ Licence Générée')
       .addFields(
-        { name: 'Utilisateur', value: `<@${targetUser.id}>`, inline: true },
-        { name: 'Discord User ID', value: `\`${targetUser.id}\``, inline: true },
-        { name: '\u200B', value: '\u200B', inline: true },
-        { name: 'Clé', value: `\`${license.key}\``, inline: false },
-        { name: '⏰ Durée', value: `${duration} jours`, inline: true },
-        { name: '📅 Expire le', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`, inline: true }
+        { name: 'Clé', value: `\`${key}\``, inline: false },
+        { name: 'Utilisateur', value: username, inline: true },
+        { name: 'Discord ID', value: discordUserId, inline: true },
+        { name: 'Expire', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true },
+        { name: '📊 Channel Logs', value: userChannel ? `<#${userChannel.id}>` : '❌ Erreur création', inline: false }
       )
       .setTimestamp();
-     await sendLogToChannel('success', `Nouvelle licence générée`, {
-  user: interaction.user.username,
-  avatar: interaction.user.displayAvatarURL(),
-  fields: [
-    { name: 'Clé', value: `\`${key}\``, inline: true },
-    { name: 'Utilisateur', value: username, inline: true },
-    { name: 'Expire', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }
-  ]
-});
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-    
+
+    await interaction.editReply({
+      embeds: [embed],
+      flags: MessageFlags.Ephemeral
+    });
+
   } catch (error) {
-    console.error('❌ Erreur génération licence:', error);
-    await interaction.reply({
-      content: `❌ Erreur lors de la génération : ${error.message}`,
-      ephemeral: true
+    console.error('[GENERATE] Erreur:', error);
+    await interaction.editReply({
+      content: '❌ Erreur lors de la génération de la licence.',
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -2023,11 +2113,115 @@ async function handleCleanupCommand(interaction) {
   }
 }
 
+// ✅ CRÉER UN CHANNEL PRIVÉ POUR L'UTILISATEUR
+async function createUserLogChannel(discordUserId, username) {
+  try {
+    const guild = client.guilds.cache.first();
+    if (!guild) {
+      console.error('[CHANNEL] Serveur Discord introuvable');
+      return null;
+    }
+
+    // Vérifier si le channel existe déjà
+    const sanitizedUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const channelName = `📊-${sanitizedUsername}-logs`;
+    
+    const existingChannel = guild.channels.cache.find(
+      ch => ch.name === channelName
+    );
+
+    if (existingChannel) {
+      console.log(`[CHANNEL] Channel existe déjà: ${existingChannel.name}`);
+      return existingChannel;
+    }
+
+    // Trouver ou créer la catégorie "NEMESIS LOGS"
+    let category = guild.channels.cache.find(
+      ch => ch.type === ChannelType.GuildCategory && ch.name === '📁 NEMESIS LOGS'
+    );
+
+    if (!category) {
+      console.log('[CHANNEL] Création de la catégorie NEMESIS LOGS...');
+      category = await guild.channels.create({
+        name: '📁 NEMESIS LOGS',
+        type: ChannelType.GuildCategory,
+        permissionOverwrites: [
+          {
+            id: guild.id,
+            deny: ['ViewChannel']
+          },
+          ...ADMIN_USER_IDS.map(adminId => ({
+            id: adminId,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
+          }))
+        ]
+      });
+    }
+
+    // Créer le channel privé
+    console.log(`[CHANNEL] Création du channel pour ${username}...`);
+    const channel = await guild.channels.create({
+      name: channelName,
+      type: ChannelType.GuildText,
+      parent: category.id,
+      topic: `Logs personnels de ${username} • Licence active`,
+      permissionOverwrites: [
+        {
+          id: guild.id,
+          deny: ['ViewChannel']
+        },
+        {
+          id: discordUserId,
+          allow: ['ViewChannel', 'ReadMessageHistory'],
+          deny: ['SendMessages']
+        },
+        ...ADMIN_USER_IDS.map(adminId => ({
+          id: adminId,
+          allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
+        }))
+      ]
+    });
+
+    console.log(`[CHANNEL] ✅ Channel créé: ${channel.name}`);
+
+    // Message de bienvenue
+    const welcomeEmbed = new EmbedBuilder()
+      .setColor('#10b981')
+      .setTitle('🎉 Bienvenue dans vos logs personnels !')
+      .setDescription(`Salut <@${discordUserId}> ! Ce channel a été créé spécialement pour toi.`)
+      .addFields(
+        {
+          name: '📊 Que contient ce channel ?',
+          value: '• Tous tes votes en temps réel\n• Tes statistiques personnelles\n• L\'historique de ta licence\n• Les alertes importantes',
+          inline: false
+        },
+        {
+          name: '🔒 Confidentialité',
+          value: 'Seuls toi et les admins avez accès à ce channel.',
+          inline: false
+        },
+        {
+          name: '💡 Astuce',
+          value: 'Active les notifications pour ce channel pour être alerté de tes votes !\nUtilise `/mylogs` pour retrouver ce channel facilement.',
+          inline: false
+        }
+      )
+      .setFooter({ text: 'Nemesis Vote • Logs Personnels' })
+      .setTimestamp();
+
+    await channel.send({ embeds: [welcomeEmbed] });
+
+    return channel;
+
+  } catch (error) {
+    console.error('[CHANNEL] Erreur création:', error);
+    return null;
+  }
+}
+
+// ✅ FONCTION AMÉLIORÉE - Envoie dans channel global + channel user
 async function sendLogToChannel(type, message, data = {}) {
   try {
-    const channel = await client.channels.fetch(LOGS_CHANNEL_ID);
-    if (!channel) return;
-
     const colors = {
       success: '#10b981',
       error: '#ef4444',
@@ -2058,7 +2252,39 @@ async function sendLogToChannel(type, message, data = {}) {
       embed.addFields(data.fields);
     }
 
-    await channel.send({ embeds: [embed] });
+    // ✅ Envoyer dans le channel GLOBAL admin
+    if (LOGS_CHANNEL_ID) {
+      try {
+        const globalChannel = await client.channels.fetch(LOGS_CHANNEL_ID);
+        if (globalChannel) {
+          await globalChannel.send({ embeds: [embed] });
+        }
+      } catch (error) {
+        console.error('[LOGS] Erreur envoi channel global:', error);
+      }
+    }
+
+    // ✅ NOUVEAU : Envoyer dans le channel PRIVÉ de l'user
+    if (data.licenseKey || data.discordUserId) {
+      try {
+        const license = await License.findOne({
+          $or: [
+            { key: data.licenseKey },
+            { discordUserId: data.discordUserId }
+          ]
+        });
+
+        if (license && license.logChannelId) {
+          const userChannel = await client.channels.fetch(license.logChannelId);
+          if (userChannel) {
+            await userChannel.send({ embeds: [embed] });
+          }
+        }
+      } catch (error) {
+        console.error('[LOGS] Erreur envoi channel user:', error);
+      }
+    }
+
   } catch (error) {
     console.error('[LOGS] Erreur envoi:', error);
   }
