@@ -581,6 +581,29 @@ new SlashCommandBuilder()
         .setRequired(true)
     ),
   // Dans le tableau commands
+  new SlashCommandBuilder()
+  .setName('addbalance')
+  .setDescription('💰 [ADMIN] Ajouter du solde à un utilisateur')
+  .addUserOption(option =>
+    option
+      .setName('user')
+      .setDescription('Utilisateur')
+      .setRequired(true)
+  )
+  .addNumberOption(option =>
+    option
+      .setName('amount')
+      .setDescription('Montant en euros')
+      .setRequired(true)
+      .setMinValue(0.01)
+      .setMaxValue(1000)
+  )
+  .addStringOption(option =>
+    option
+      .setName('reason')
+      .setDescription('Raison (optionnel)')
+      .setRequired(false)
+  ),
 new SlashCommandBuilder()
   .setName('unsuspend')
   .setDescription('[ADMIN] Lever la suspension d\'une licence')
@@ -826,6 +849,9 @@ client.on('interactionCreate', async (interaction) => {
         case 'shop':
   await handleShopCommand(interaction);
   break;
+        case 'addbalance':
+  await handleAddBalanceCommand(interaction);
+  break;
       case 'userinfo':
         await handleUserInfoCommand(interaction);
         break;
@@ -871,6 +897,77 @@ case 'reset-ips':
 // ========== HANDLERS DES COMMANDES ==========
 
 // ==================== HANDLER SHOP COMMAND ====================
+async function handleAddBalanceCommand(interaction) {
+  try {
+    // Vérification admin
+    if (!ADMIN_IDS.includes(interaction.user.id)) {
+      return interaction.reply({
+        content: '❌ Cette commande est réservée aux administrateurs.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    const targetUser = interaction.options.getUser('user');
+    const amount = interaction.options.getNumber('amount');
+    const reason = interaction.options.getString('reason') || 'Ajout manuel admin';
+    
+    // Ajouter le solde
+    const newBalance = await addBalance(targetUser.id, amount, reason);
+    
+    const embed = new EmbedBuilder()
+      .setColor('#10b981')
+      .setTitle('✅ Solde ajouté')
+      .addFields(
+        { name: '👤 Utilisateur', value: `<@${targetUser.id}>`, inline: true },
+        { name: '💰 Montant ajouté', value: `+${amount.toFixed(2)}€`, inline: true },
+        { name: '📊 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
+        { name: '📝 Raison', value: reason, inline: false }
+      )
+      .setFooter({ text: `Admin: ${interaction.user.username}` })
+      .setTimestamp();
+    
+    await interaction.reply({ 
+      embeds: [embed],
+      flags: MessageFlags.Ephemeral 
+    });
+    
+    // Notifier l'utilisateur
+    try {
+      const userEmbed = new EmbedBuilder()
+        .setColor('#10b981')
+        .setTitle('💰 Solde crédité')
+        .setDescription(`Votre solde a été crédité de **${amount.toFixed(2)}€**`)
+        .addFields(
+          { name: '📊 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
+          { name: '📝 Raison', value: reason, inline: false }
+        )
+        .setFooter({ text: 'Nemesis Vote • Crédit admin' })
+        .setTimestamp();
+      
+      await targetUser.send({ embeds: [userEmbed] });
+    } catch (error) {
+      console.log('[ADDBALANCE] Impossible de DM l\'utilisateur');
+    }
+    
+    // Log admin
+    await sendLogToChannel('success', `Solde ajouté manuellement`, {
+      fields: [
+        { name: '👤 Utilisateur', value: `<@${targetUser.id}>`, inline: true },
+        { name: '💰 Montant', value: `+${amount.toFixed(2)}€`, inline: true },
+        { name: '📊 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
+        { name: '👨‍💼 Admin', value: `<@${interaction.user.id}>`, inline: true },
+        { name: '📝 Raison', value: reason, inline: false }
+      ]
+    });
+    
+  } catch (error) {
+    console.error('[ADDBALANCE] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors de l\'ajout du solde.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
 async function handleShopCommand(interaction) {
   try {
     const balance = await getBalance(interaction.user.id);
@@ -964,60 +1061,46 @@ async function handleRechargeMenu(interaction) {
 }
 
 // ==================== HANDLER CONFIRMATION RECHARGE ====================
-async function handleRechargeConfirm(interaction, amount) {
+async function handleRechargeMenu(interaction) {
   try {
-    const expiresAt = await createPendingRecharge(interaction.user.id, amount);
+    const balance = await getBalance(interaction.user.id);
     
     const embed = new EmbedBuilder()
-      .setColor('#f59e0b')
-      .setTitle(`💰 Rechargement de ${amount.toFixed(2)}€`)
-      .setDescription('**Instructions de paiement PayPal**')
-      .addFields(
-        { 
-          name: '📧 Email PayPal', 
-          value: '`voteno0zly@outlook.com`', 
-          inline: false 
-        },
-        { 
-          name: '🔢 ID à mettre dans la note de paiement', 
-          value: `\`${interaction.user.id}\``, 
-          inline: false 
-        },
-        { 
-          name: '💶 Montant exact', 
-          value: `**${amount.toFixed(2)}€**`, 
-          inline: true 
-        },
-        { 
-          name: '⏰ Expire dans', 
-          value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, 
-          inline: true 
-        }
-      )
-      .setFooter({ text: '⚠️ N\'oubliez pas de mettre votre ID dans la note de paiement !' })
+      .setColor('#10b981')
+      .setTitle('💳 RECHARGEMENT DE SOLDE')
+      .setDescription(`💰 **Solde actuel :** ${balance.toFixed(2)}€\n\nSélectionnez un montant à recharger`)
+      .setFooter({ text: 'Nemesis Vote • Rechargement' })
       .setTimestamp();
     
-    const buttons = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId('recharge_sent')
-          .setLabel('✅ J\'ai envoyé le paiement')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId('recharge_cancel')
-          .setLabel('❌ Annuler')
-          .setStyle(ButtonStyle.Danger)
-      );
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('recharge_amount_menu')
+      .setPlaceholder('Montant à recharger...')
+      .addOptions([
+        ...RECHARGE_AMOUNTS.map(amount => ({
+          label: `${amount}€`,
+          description: `Recharger ${amount}€ via PayPal`,
+          value: amount.toString(),
+          emoji: '💵'
+        })),
+        {
+          label: '✏️ Montant personnalisé',
+          description: 'Entrer un montant manuel',
+          value: 'custom',
+          emoji: '✏️'
+        }
+      ]);
+    
+    const row = new ActionRowBuilder().addComponents(menu);
     
     await interaction.update({ 
       embeds: [embed], 
-      components: [buttons]
+      components: [row]
     });
     
   } catch (error) {
-    console.error('[RECHARGE] Erreur confirmation:', error);
+    console.error('[RECHARGE] Erreur menu:', error);
     await interaction.update({
-      content: '❌ Erreur lors de la création de la recharge.',
+      content: '❌ Erreur lors du chargement du menu.',
       embeds: [],
       components: []
     });
@@ -1968,10 +2051,59 @@ client.on('interactionCreate', async (interaction) => {
     }
     
     // Menu montant recharge
-    if (interaction.customId === 'recharge_amount_menu') {
-      const amount = parseFloat(interaction.values[0]);
-      await handleRechargeConfirm(interaction, amount);
-    }
+if (interaction.customId === 'recharge_amount_menu') {
+  const value = interaction.values[0];
+  
+  if (value === 'custom') {
+    // Demander montant personnalisé
+    await interaction.update({
+      content: '✏️ **Montant personnalisé**\n\nVeuillez envoyer le montant que vous souhaitez recharger (minimum 5€)\n\nExemple: `15` pour 15€',
+      embeds: [],
+      components: []
+    });
+    
+    // Créer collector pour attendre le message
+    const filter = m => m.author.id === interaction.user.id && !isNaN(m.content);
+    const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
+    
+    collector.on('collect', async (msg) => {
+      const amount = parseFloat(msg.content);
+      
+      if (amount < 5) {
+        await msg.reply('❌ Le montant minimum est de 5€.');
+        return;
+      }
+      
+      if (amount > 500) {
+        await msg.reply('❌ Le montant maximum est de 500€.');
+        return;
+      }
+      
+      await msg.delete().catch(() => {});
+      
+      // Créer une fake interaction pour handleRechargeConfirm
+      const fakeInteraction = {
+        ...interaction,
+        update: interaction.editReply.bind(interaction)
+      };
+      
+      await handleRechargeConfirm(fakeInteraction, amount);
+    });
+    
+    collector.on('end', collected => {
+      if (collected.size === 0) {
+        interaction.editReply({
+          content: '❌ Temps écoulé. Refaites `/shop` pour recommencer.',
+          components: []
+        }).catch(() => {});
+      }
+    });
+    
+  } else {
+    const amount = parseFloat(value);
+    await handleRechargeConfirm(interaction, amount);
+  }
+}
     
     // Menu durée achat
     if (interaction.customId === 'buy_duration_menu') {
