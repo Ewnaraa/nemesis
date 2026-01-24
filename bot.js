@@ -636,7 +636,7 @@ client.on('interactionCreate', async (interaction) => {
         break;
         
       case 'changelog':
-  const versions = ['2.6.1', '2.6.0', '2.5.0', '2.4.0', '2.3.0'];
+  const versions = ['2.6.1', '2.6.0', '2.5.0', '2.4.0'];
   const embeds = [];
   
   for (const version of versions) {
