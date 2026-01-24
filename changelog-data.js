@@ -1,4 +1,5 @@
-// changelog-data.js
+// changelog-data.js - Données du changelog Nemesis Vote
+
 const changelogData = {
   "2.6.1": {
     title: "🎉 Votre Espace Personnel Discord",
@@ -17,6 +18,19 @@ const changelogData = {
       "Les admins ont de nouvelles commandes pour mieux vous aider"
     ]
   },
+  "2.6.0": {
+    title: "🔧 Corrections Importantes",
+    date: "24 Janvier 2025",
+    description: "Stabilité et sécurité améliorées",
+    features: [
+      "Nouvelles commandes admin Discord (/reset-ips, /unsuspend)"
+    ],
+    improvements: [
+      "Meilleure détection de votre vraie adresse IP",
+      "Protection renforcée contre les doubles votes",
+      "Moins d'erreurs techniques"
+    ]
+  },
   "2.5.0": {
     title: "🛡️ Fini les Votes Perdus !",
     date: "24 Janvier 2025",
@@ -28,7 +42,24 @@ const changelogData = {
     ],
     improvements: [
       "5 minutes de marge en plus sur Hyperion pour être sûr",
-      "Voir le classement des meilleurs voteurs"
+      "Voir le classement des meilleurs voteurs",
+      "Filtres avancés pour voir vos licences"
+    ]
+  },
+  "2.4.0": {
+    title: "🔐 Sécurité & Licences",
+    date: "18 Janvier 2025",
+    description: "Protection de votre compte et système de licences",
+    features: [
+      "Vous devez maintenant activer une licence pour utiliser le bot",
+      "Gérez votre licence directement sur Discord",
+      "Protection contre le partage de compte",
+      "Parrainez vos amis et gagnez des réductions !"
+    ],
+    improvements: [
+      "Votre compte est maintenant protégé",
+      "Interface d'activation simple et jolie",
+      "Suivez vos statistiques de votes"
     ]
   }
 };
