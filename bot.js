@@ -16,6 +16,7 @@ const {
 
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
+const { changelogData } = require('./changelog-data.js');
 
 const express = require('express');
 const cors = require('cors');
@@ -211,6 +212,9 @@ app.get('/api/license/:key', async (req, res) => {
 });
 
 // ========== DISCORD COMMANDS ==========
+new SlashCommandBuilder()
+  .setName('changelog')
+  .setDescription('📋 Voir les dernières mises à jour'),
 
 const commands = [
   // Commande /buy
@@ -630,6 +634,22 @@ client.on('interactionCreate', async (interaction) => {
       case 'buy':
         await handleBuyCommand(interaction);
         break;
+        
+      case 'changelog':
+  const version = "2.6.1";
+  const data = changelogData[version];
+  const embed = new EmbedBuilder()
+    .setColor('#10b981')
+    .setTitle(`${data.title} - v${version}`)
+    .setDescription(data.description)
+    .addFields(
+      { name: '✨ Nouveautés', value: data.features.join('\n') },
+      { name: '⚡ Améliorations', value: data.improvements.join('\n') }
+    )
+    .setFooter({ text: `Nemesis Vote • ${data.date}` })
+    .setTimestamp();
+  await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  break;
         
       case 'license':
         await handleLicenseCommand(interaction);
