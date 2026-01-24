@@ -13,6 +13,16 @@ const {
   MessageFlags,
   ChannelType // ✅ AJOUTER
 } = require('discord.js');
+const { 
+  LICENSE_PRICES, 
+  RECHARGE_AMOUNTS,
+  getBalance,
+  addBalance,
+  deductBalance,
+  getTransactionHistory,
+  createPendingRecharge,
+  cleanExpiredRecharges
+} = require('./shop-system');
 
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
@@ -218,7 +228,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('buy')
     .setDescription('Acheter une licence Auto Vote Bot'),
-  
+ 
+  new SlashCommandBuilder()
+  .setName('shop')
+  .setDescription('💎 Boutique Nemesis - Recharger solde et acheter licences')
   // Commande /license
   new SlashCommandBuilder()
     .setName('license')
@@ -729,7 +742,9 @@ client.on('interactionCreate', async (interaction) => {
       case 'extend':
         await handleExtendCommand(interaction);
         break;
-        
+        case 'shop':
+  await handleShopCommand(interaction);
+  break;
       case 'userinfo':
         await handleUserInfoCommand(interaction);
         break;
@@ -773,6 +788,57 @@ case 'reset-ips':
 });
 
 // ========== HANDLERS DES COMMANDES ==========
+async function handleShopCommand(interaction) {
+  try {
+    const balance = await getBalance(interaction.user.id);
+    
+    const embed = new EmbedBuilder()
+      .setColor('#6366f1')
+      .setTitle('💎 NEMESIS SHOP')
+      .setDescription(`💰 **Votre solde actuel :** ${balance.toFixed(2)}€\n\nSélectionnez une action ci-dessous`)
+      .setFooter({ text: 'Nemesis Vote • Shop' })
+      .setTimestamp();
+    
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('shop_menu')
+      .setPlaceholder('Sélectionnez une action...')
+      .addOptions([
+        {
+          label: 'Recharger mon solde',
+          description: 'Ajouter des fonds via PayPal',
+          value: 'recharge',
+          emoji: '💳'
+        },
+        {
+          label: 'Acheter une licence',
+          description: 'Acheter une licence avec votre solde',
+          value: 'buy',
+          emoji: '🛒'
+        },
+        {
+          label: 'Voir mon historique',
+          description: 'Historique de vos transactions',
+          value: 'history',
+          emoji: '📊'
+        }
+      ]);
+    
+    const row = new ActionRowBuilder().addComponents(menu);
+    
+    await interaction.reply({ 
+      embeds: [embed], 
+      components: [row],
+      flags: MessageFlags.Ephemeral 
+    });
+    
+  } catch (error) {
+    console.error('[SHOP] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors de l\'ouverture du shop.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
 async function handleFixChannelsCommand(interaction) {
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
