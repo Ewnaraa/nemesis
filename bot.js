@@ -1213,17 +1213,20 @@ async function handleGenerateCommand(interaction) {
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const username = interaction.options.getString('username');
-    const discordUserId = interaction.options.getString('discord_id');
-    const referralCode = interaction.options.getString('referral_code');
+    const targetUser = interaction.options.getUser('user');
+    const duration = interaction.options.getInteger('duration') || 30;
 
-    if (!username || !discordUserId) {
+    if (!targetUser) {
       return interaction.editReply({
-        content: '❌ Username et Discord User ID requis.',
+        content: '❌ Utilisateur requis.',
         flags: MessageFlags.Ephemeral
       });
     }
 
+    const discordUserId = targetUser.id;
+    const username = targetUser.username;
+
+    // Vérifier si l'utilisateur a déjà une licence active
     const existingLicense = await License.findOne({
       discordUserId,
       status: { $in: ['active', 'suspended'] }
@@ -1231,22 +1234,24 @@ async function handleGenerateCommand(interaction) {
 
     if (existingLicense) {
       return interaction.editReply({
-        content: `❌ Cet utilisateur possède déjà une licence active (\`${existingLicense.key}\`).`,
+        content: `❌ ${username} possède déjà une licence active (\`${existingLicense.key}\`).`,
         flags: MessageFlags.Ephemeral
       });
     }
 
+    // Générer la licence
     const key = generateLicenseKey();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
 
     const newLicense = await License.create({
       key,
       username,
+      userId: discordUserId, // Pour compatibilité avec ton schéma
       discordUserId,
       expiresAt,
       status: 'active',
-      activatedAt: new Date(),
-      referralCode: referralCode || null
+      createdAt: new Date(),
+      lastVerified: new Date()
     });
 
     // ✅ CRÉER LE CHANNEL PRIVÉ
@@ -1258,23 +1263,7 @@ async function handleGenerateCommand(interaction) {
       console.log(`[GENERATE] Channel créé pour ${username}: ${userChannel.id}`);
     }
 
-    if (referralCode) {
-      try {
-        await fetch(`${process.env.API_URL || 'http://localhost:3000'}/api/referral/record`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            referrerCode: referralCode,
-            referredUserId: discordUserId,
-            referredUsername: username
-          })
-        });
-        console.log(`[GENERATE] Parrainage enregistré pour ${referralCode}`);
-      } catch (error) {
-        console.error('[GENERATE] Erreur enregistrement parrainage:', error);
-      }
-    }
-
+    // Log dans la DB
     await Log.create({
       licenseKey: key,
       action: 'activate',
@@ -1288,22 +1277,26 @@ async function handleGenerateCommand(interaction) {
       avatar: interaction.user.displayAvatarURL(),
       fields: [
         { name: 'Clé', value: `\`${key}\``, inline: true },
-        { name: 'Utilisateur', value: username, inline: true },
+        { name: 'Utilisateur', value: `${username} (<@${discordUserId}>)`, inline: true },
+        { name: 'Durée', value: `${duration} jours`, inline: true },
         { name: 'Channel', value: userChannel ? `<#${userChannel.id}>` : '❌ Erreur', inline: true },
         { name: 'Expire', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }
       ]
     });
 
+    // Réponse
     const embed = new EmbedBuilder()
       .setColor('#10b981')
       .setTitle('✅ Licence Générée')
       .addFields(
         { name: 'Clé', value: `\`${key}\``, inline: false },
-        { name: 'Utilisateur', value: username, inline: true },
+        { name: 'Utilisateur', value: `${username} (<@${discordUserId}>)`, inline: true },
         { name: 'Discord ID', value: discordUserId, inline: true },
+        { name: 'Durée', value: `${duration} jours`, inline: true },
         { name: 'Expire', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true },
         { name: '📊 Channel Logs', value: userChannel ? `<#${userChannel.id}>` : '❌ Erreur création', inline: false }
       )
+      .setFooter({ text: `Généré par ${interaction.user.username}` })
       .setTimestamp();
 
     await interaction.editReply({
@@ -1319,7 +1312,6 @@ async function handleGenerateCommand(interaction) {
     });
   }
 }
-
 async function handleRevokeCommand(interaction) {
   const key = interaction.options.getString('key');
   const user = interaction.options.getUser('user');
