@@ -789,10 +789,14 @@ async function handleResetIpsCommand(interaction) {
 
 async function handleMyLogsCommand(interaction) {
   try {
+    console.log('[MYLOGS] Recherche licence pour:', interaction.user.id);
+    
     const license = await License.findOne({ 
       discordUserId: interaction.user.id,
       status: 'active'
     });
+
+    console.log('[MYLOGS] Licence trouvée:', license ? 'OUI' : 'NON');
 
     if (!license) {
       return interaction.reply({
@@ -801,13 +805,20 @@ async function handleMyLogsCommand(interaction) {
       });
     }
 
+    console.log('[MYLOGS] logChannelId actuel:', license.logChannelId);
+
     if (!license.logChannelId) {
-      // Essayer de créer le channel si manquant
+      console.log('[MYLOGS] Tentative création channel...');
+      
+      // Essayer de créer le channel
       const channel = await createUserLogChannel(interaction.user.id, license.username);
+      
+      console.log('[MYLOGS] Channel créé:', channel ? channel.id : 'ECHEC');
       
       if (channel) {
         license.logChannelId = channel.id;
         await license.save();
+        console.log('[MYLOGS] Channel ID sauvegardé dans DB');
         
         return interaction.reply({
           content: `📊 Votre channel de logs vient d'être créé : <#${channel.id}>`,
@@ -821,10 +832,41 @@ async function handleMyLogsCommand(interaction) {
       }
     }
 
-    await interaction.reply({
-      content: `📊 Voici votre channel de logs : <#${license.logChannelId}>`,
-      flags: MessageFlags.Ephemeral
-    });
+    console.log('[MYLOGS] Channel existe déjà, vérification...');
+    
+    // Vérifier que le channel existe vraiment
+    try {
+      const channel = await client.channels.fetch(license.logChannelId);
+      console.log('[MYLOGS] Channel fetch OK:', channel.name);
+      
+      await interaction.reply({
+        content: `📊 Voici votre channel de logs : <#${license.logChannelId}>`,
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      console.error('[MYLOGS] Channel introuvable, reset et recréation...');
+      
+      // Channel n'existe plus, recréer
+      license.logChannelId = null;
+      await license.save();
+      
+      const channel = await createUserLogChannel(interaction.user.id, license.username);
+      
+      if (channel) {
+        license.logChannelId = channel.id;
+        await license.save();
+        
+        return interaction.reply({
+          content: `📊 Votre channel de logs a été recréé : <#${channel.id}>`,
+          flags: MessageFlags.Ephemeral
+        });
+      } else {
+        return interaction.reply({
+          content: '⚠️ Impossible de créer votre channel de logs. Contactez un admin.',
+          flags: MessageFlags.Ephemeral
+        });
+      }
+    }
 
   } catch (error) {
     console.error('[MYLOGS] Erreur:', error);
