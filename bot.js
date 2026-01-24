@@ -113,25 +113,37 @@ app.post('/api/verify', async (req, res) => {
   const result = await verifyLicense(key, ip, discordUserId, isRealUsage || false);
   
   // ✅ LOGS DISCORD
-  if (result.valid && isRealUsage) {
-    await sendLogToChannel('success', `Vote réussi`, {
-      user: result.license.username,
-      licenseKey: key, // ✅ Pour envoyer dans channel user
-      fields: [
-        { name: 'Serveur', value: req.body.serverId || 'Inconnu', inline: true },
-        { name: 'Total Votes', value: `${result.license.usageCount}`, inline: true },
-        { name: 'IP', value: ip, inline: true }
-      ]
-    });
-  } else if (!result.valid) {
-    await sendLogToChannel('error', `Vote échoué`, {
-      discordUserId: discordUserId, // ✅ Pour envoyer dans channel user
-      fields: [
-        { name: 'Clé', value: `\`${key.substring(0, 9)}...\``, inline: true },
-        { name: 'Erreur', value: result.error, inline: true }
-      ]
-    });
-  }
+if (result.valid && isRealUsage) {
+  const now = new Date();
+  const nextVote = new Date(now.getTime() + (91 * 60 * 1000)); // 91 minutes
+  
+  await sendLogToChannel('success', `Vote réussi`, {
+    user: result.license.username,
+    licenseKey: key,
+    fields: [
+      { name: '🎮 Serveur', value: req.body.serverId || 'Inconnu', inline: true },
+      { name: '📊 Total Votes', value: `${result.license.usageCount}`, inline: true },
+      { name: '🌐 IP', value: ip, inline: true },
+      { name: '🕒 Heure', value: `<t:${Math.floor(now.getTime() / 1000)}:T>`, inline: true },
+      { 
+        name: '⏰ Prochain Vote', 
+        value: `<t:${Math.floor(nextVote.getTime() / 1000)}:t> (<t:${Math.floor(nextVote.getTime() / 1000)}:R>)`, 
+        inline: true 
+      }
+    ]
+  });
+} else if (!result.valid) {
+  const now = new Date();
+  
+  await sendLogToChannel('error', `Vote échoué`, {
+    discordUserId: discordUserId,
+    fields: [
+      { name: '🔑 Clé', value: `\`${key.substring(0, 9)}...\``, inline: true },
+      { name: '❌ Erreur', value: result.error, inline: true },
+      { name: '🕒 Heure', value: `<t:${Math.floor(now.getTime() / 1000)}:T>`, inline: true }
+    ]
+  });
+}
   
   res.json(result);
 });
