@@ -636,38 +636,41 @@ client.on('interactionCreate', async (interaction) => {
         break;
         
       case 'changelog':
-  const latestVersion = "2.6.1";
-  const changelogInfo = changelogData[latestVersion];
+  const versions = ['2.6.1', '2.6.0', '2.5.0', '2.4.0', '2.3.0'];
+  const embeds = [];
   
-  if (!changelogInfo) {
-    return interaction.reply({
-      content: '❌ Changelog introuvable.',
-      flags: MessageFlags.Ephemeral
-    });
+  for (const version of versions) {
+    const info = changelogData[version];
+    if (!info) continue;
+    
+    const embed = new EmbedBuilder()
+      .setColor(version === '2.6.1' ? '#10b981' : '#6366f1')
+      .setTitle(`${info.title} - v${version}`)
+      .setDescription(info.description)
+      .setFooter({ text: `Nemesis Vote • ${info.date}` });
+    
+    if (info.features && info.features.length > 0) {
+      embed.addFields({
+        name: '✨ Nouveautés',
+        value: info.features.join('\n'),
+        inline: false
+      });
+    }
+    
+    if (info.improvements && info.improvements.length > 0) {
+      embed.addFields({
+        name: '⚡ Améliorations',
+        value: info.improvements.join('\n'),
+        inline: false
+      });
+    }
+    
+    embeds.push(embed);
   }
   
-  const changelogEmbed = new EmbedBuilder()
-    .setColor('#10b981')
-    .setTitle(`${changelogInfo.title} - v${latestVersion}`)
-    .setDescription(changelogInfo.description)
-    .addFields(
-      { 
-        name: '✨ Nouveautés', 
-        value: changelogInfo.features.join('\n'), 
-        inline: false 
-      },
-      { 
-        name: '⚡ Améliorations', 
-        value: changelogInfo.improvements.join('\n'), 
-        inline: false 
-      }
-    )
-    .setFooter({ text: `Nemesis Vote • ${changelogInfo.date} • Demandé par ${interaction.user.username}` })
-    .setTimestamp();
-  
   await interaction.reply({ 
-    embeds: [changelogEmbed]
-    // ✅ Plus de flags: MessageFlags.Ephemeral = message PUBLIC
+    content: `📋 **Historique des mises à jour** (demandé par ${interaction.user.username})`,
+    embeds: embeds
   });
   break;
         
