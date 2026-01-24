@@ -446,6 +446,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('referral')
     .setDescription('Voir vos statistiques de parrainage'),
+  
+new SlashCommandBuilder()
+  .setName('fix-channels')
+  .setDescription('[ADMIN] Créer les channels manquants pour toutes les licences actives'),
 
   // Commande /refer (ADMIN)
   new SlashCommandBuilder()
@@ -632,6 +636,9 @@ client.on('interactionCreate', async (interaction) => {
         await handleCheckCommand(interaction);
         break;
         
+        case 'fix-channels':
+  await handleFixChannelsCommand(interaction);
+  break;
         case 'mylogs':
   await handleMyLogsCommand(interaction);
   break;
@@ -699,6 +706,50 @@ case 'reset-ips':
 });
 
 // ========== HANDLERS DES COMMANDES ==========
+async function handleFixChannelsCommand(interaction) {
+  try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const licenses = await License.find({ 
+      status: 'active',
+      logChannelId: null // Seulement celles sans channel
+    });
+
+    let created = 0;
+    let errors = 0;
+
+    for (const license of licenses) {
+      try {
+        const channel = await createUserLogChannel(license.discordUserId, license.username);
+        
+        if (channel) {
+          license.logChannelId = channel.id;
+          await license.save();
+          created++;
+          console.log(`[FIX-CHANNELS] ✅ Channel créé pour ${license.username}`);
+        } else {
+          errors++;
+          console.log(`[FIX-CHANNELS] ❌ Échec pour ${license.username}`);
+        }
+      } catch (error) {
+        errors++;
+        console.error(`[FIX-CHANNELS] Erreur pour ${license.username}:`, error);
+      }
+    }
+
+    await interaction.editReply({
+      content: `✅ Terminé !\n\n📊 Channels créés : ${created}\n❌ Erreurs : ${errors}\n📋 Total licences : ${licenses.length}`,
+      flags: MessageFlags.Ephemeral
+    });
+
+  } catch (error) {
+    console.error('[FIX-CHANNELS] Erreur:', error);
+    await interaction.editReply({
+      content: '❌ Erreur lors de la création des channels.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
 async function handleResetLogsCommand(interaction) {
   try {
     const targetUser = interaction.options.getUser('user');
