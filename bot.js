@@ -1139,7 +1139,12 @@ async function handleHelpCommand(interaction) {
           name: '/referral', 
           desc: 'Voir votre code de parrainage et vos filleuls',
           usage: '/referral'
-        }
+        },
+        { 
+          name: '/mylogs', // ✅ AJOUTE ICI
+        value: '📊 Accéder à votre channel de logs personnels\n**Exemple:** `/mylogs`', 
+        inline: false 
+      }
       ]
     },
     support: {
@@ -1156,6 +1161,7 @@ async function handleHelpCommand(interaction) {
       links: [
         '📖 [Documentation](https://docs.nemesis.vote)',
         '💬 [Discord Support](https://discord.gg/nemesis)',
+        '💬 [-> Ticket] #🎫-tickets',
         '📧 Email: support@nemesis.vote'
       ]
     },
@@ -1225,7 +1231,12 @@ async function handleHelpCommand(interaction) {
           name: '/cleanup', 
           desc: 'Nettoyer les licences expirées',
           usage: '/cleanup days:30'
-        }
+        },
+         { 
+        name: '/resetlogs', // ✅ AJOUTE ICI
+        value: '🔄 Reset le channel de logs d\'un utilisateur\n**Exemple:** `/resetlogs user:@User`', 
+        inline: false 
+      }
       ]
     }
   };
