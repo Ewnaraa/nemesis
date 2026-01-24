@@ -31,6 +31,7 @@ const {
 const ADMIN_IDS = process.env.ADMIN_IDS?.split(',') || [];
 const PREMIUM_ROLE_NAME = '👑 Premium';
 const LOGS_CHANNEL_ID = '1464405330531193078';
+const GUILD_ID = '1462219100171534551'; // 
 
 // ========== DISCORD CLIENT ==========
 const client = new Client({
@@ -2105,7 +2106,7 @@ async function handleCleanupCommand(interaction) {
 // ✅ CRÉER UN CHANNEL PRIVÉ POUR L'UTILISATEUR
 async function createUserLogChannel(discordUserId, username) {
   try {
-    const guild = client.guilds.cache.first();
+const guild = client.guilds.cache.get(GUILD_ID);
     if (!guild) {
       console.error('[CHANNEL] Serveur Discord introuvable');
       return null;
