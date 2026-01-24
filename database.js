@@ -32,6 +32,11 @@ const licenseSchema = new mongoose.Schema({
     index: true
   },
   
+   logChannelId: {  // ✅ AJOUTE CETTE LIGNE ICI
+    type: String,
+    default: null
+  },
+  
   createdAt: {
     type: Date,
     default: Date.now
