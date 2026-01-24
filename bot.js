@@ -1965,17 +1965,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-  if (interaction.customId === 'help_menu') {
-    const category = interaction.values[0];
-    
-    // Réutilise handleHelpCommand avec la catégorie
-    interaction.options = {
-      getString: () => category
-    };
-    
-    await handleHelpCommand(interaction);
-  }
-});
 async function handleCleanInvalidCommand(interaction) {
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
