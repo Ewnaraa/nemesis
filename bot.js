@@ -1040,7 +1040,13 @@ async function handleRechargeMenu(interaction) {
           description: `Recharger ${amount}€ via PayPal`,
           value: amount.toString(),
           emoji: '💵'
-        }))
+        })),
+        {
+          label: '✏️ Montant personnalisé',
+          description: 'Entrer un montant manuel',
+          value: 'custom',
+          emoji: '✏️'
+        }
       );
     
     const row = new ActionRowBuilder().addComponents(menu);
