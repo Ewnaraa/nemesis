@@ -1061,46 +1061,75 @@ async function handleRechargeMenu(interaction) {
 }
 
 // ==================== HANDLER CONFIRMATION RECHARGE ====================
-async function handleRechargeMenu(interaction) {
+async function handleRechargeConfirm(interaction, amount) {
   try {
-    const balance = await getBalance(interaction.user.id);
+    const expiresAt = await createPendingRecharge(interaction.user.id, amount);
+    
+    const paypalLink = `https://paypal.me/NemesisApp/${amount.toFixed(2)}EUR`;
     
     const embed = new EmbedBuilder()
-      .setColor('#10b981')
-      .setTitle('💳 RECHARGEMENT DE SOLDE')
-      .setDescription(`💰 **Solde actuel :** ${balance.toFixed(2)}€\n\nSélectionnez un montant à recharger`)
-      .setFooter({ text: 'Nemesis Vote • Rechargement' })
+      .setColor('#f59e0b')
+      .setTitle(`💰 Rechargement de ${amount.toFixed(2)}€`)
+      .setDescription('**Instructions de paiement PayPal**')
+      .addFields(
+        { 
+          name: '🔗 ÉTAPE 1 : Cliquer sur le lien', 
+          value: `[➡️ Ouvrir PayPal (${amount.toFixed(2)}€)](${paypalLink})`, 
+          inline: false 
+        },
+        { 
+          name: '📝 ÉTAPE 2 : IMPORTANT - Ajouter une note', 
+          value: `Sur la page PayPal, cliquez sur **"Ajouter une note"** et collez ceci :\n\`\`\`${interaction.user.id}\`\`\``, 
+          inline: false 
+        },
+        { 
+          name: '✅ ÉTAPE 3 : Payer', 
+          value: 'Cliquez sur "Suivant" puis validez le paiement', 
+          inline: false 
+        },
+        { 
+          name: '🎉 Résultat', 
+          value: 'Votre solde sera crédité **automatiquement** en quelques secondes !', 
+          inline: false 
+        },
+        { 
+          name: '⏰ Expire dans', 
+          value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, 
+          inline: true 
+        }
+      )
+      .setFooter({ text: '⚠️ Sans la note avec votre ID, le paiement ne sera PAS crédité !' })
       .setTimestamp();
     
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId('recharge_amount_menu')
-      .setPlaceholder('Montant à recharger...')
-      .addOptions([
-        ...RECHARGE_AMOUNTS.map(amount => ({
-          label: `${amount}€`,
-          description: `Recharger ${amount}€ via PayPal`,
-          value: amount.toString(),
-          emoji: '💵'
-        })),
-        {
-          label: '✏️ Montant personnalisé',
-          description: 'Entrer un montant manuel',
-          value: 'custom',
-          emoji: '✏️'
-        }
-      ]);
-    
-    const row = new ActionRowBuilder().addComponents(menu);
+    const buttons = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setURL(paypalLink)
+          .setLabel('💳 Payer sur PayPal')
+          .setStyle(ButtonStyle.Link),
+        new ButtonBuilder()
+          .setCustomId(`copy_id_${interaction.user.id}`)
+          .setLabel('📋 Copier mon ID')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('recharge_sent')
+          .setLabel('✅ J\'ai payé')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('recharge_cancel')
+          .setLabel('❌ Annuler')
+          .setStyle(ButtonStyle.Danger)
+      );
     
     await interaction.update({ 
       embeds: [embed], 
-      components: [row]
+      components: [buttons]
     });
     
   } catch (error) {
-    console.error('[RECHARGE] Erreur menu:', error);
+    console.error('[RECHARGE] Erreur confirmation:', error);
     await interaction.update({
-      content: '❌ Erreur lors du chargement du menu.',
+      content: '❌ Erreur lors de la création de la recharge.',
       embeds: [],
       components: []
     });
@@ -1120,26 +1149,10 @@ async function handleBuyMenu(interaction) {
       .setTimestamp();
     
     const options = [
-      {
-        days: 30,
-        price: LICENSE_PRICES[30],
-        discount: null
-      },
-      {
-        days: 90,
-        price: LICENSE_PRICES[90],
-        discount: '-20%'
-      },
-      {
-        days: 180,
-        price: LICENSE_PRICES[180],
-        discount: '-33%'
-      },
-      {
-        days: 365,
-        price: LICENSE_PRICES[365],
-        discount: '-42%'
-      }
+      { days: 30, price: LICENSE_PRICES[30], discount: null },
+      { days: 90, price: LICENSE_PRICES[90], discount: '-20%' },
+      { days: 180, price: LICENSE_PRICES[180], discount: '-33%' },
+      { days: 365, price: LICENSE_PRICES[365], discount: '-42%' }
     ];
     
     const menu = new StringSelectMenuBuilder()
@@ -1200,26 +1213,10 @@ async function handleBuyConfirm(interaction, days) {
       .setTitle('✅ CONFIRMATION D\'ACHAT')
       .setDescription('**Récapitulatif de votre achat**')
       .addFields(
-        { 
-          name: '📅 Licence', 
-          value: `${days} jours`, 
-          inline: true 
-        },
-        { 
-          name: '💰 Prix', 
-          value: `${price.toFixed(2)}€`, 
-          inline: true 
-        },
-        { 
-          name: '💳 Solde actuel', 
-          value: `${balance.toFixed(2)}€`, 
-          inline: true 
-        },
-        { 
-          name: '📊 Nouveau solde', 
-          value: `${newBalance.toFixed(2)}€`, 
-          inline: true 
-        }
+        { name: '📅 Licence', value: `${days} jours`, inline: true },
+        { name: '💰 Prix', value: `${price.toFixed(2)}€`, inline: true },
+        { name: '💳 Solde actuel', value: `${balance.toFixed(2)}€`, inline: true },
+        { name: '📊 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true }
       )
       .setFooter({ text: 'Nemesis Vote • Confirmation d\'achat' })
       .setTimestamp();
@@ -1282,26 +1279,10 @@ async function handleBuyFinal(interaction, days) {
       .setTitle('✅ ACHAT RÉUSSI !')
       .setDescription('**Votre licence a été générée avec succès**')
       .addFields(
-        { 
-          name: '🔑 Clé de licence', 
-          value: `\`${license.key}\``, 
-          inline: false 
-        },
-        { 
-          name: '📅 Durée', 
-          value: `${days} jours`, 
-          inline: true 
-        },
-        { 
-          name: '📆 Expire le', 
-          value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:D>`, 
-          inline: true 
-        },
-        { 
-          name: '💰 Nouveau solde', 
-          value: `${newBalance.toFixed(2)}€`, 
-          inline: true 
-        }
+        { name: '🔑 Clé de licence', value: `\`${license.key}\``, inline: false },
+        { name: '📅 Durée', value: `${days} jours`, inline: true },
+        { name: '📆 Expire le', value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:D>`, inline: true },
+        { name: '💰 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true }
       )
       .setFooter({ text: 'Nemesis Vote • Merci pour votre achat !' })
       .setTimestamp();
@@ -2132,7 +2113,15 @@ if (interaction.customId === 'recharge_amount_menu') {
         components: []
       });
     }
+     // Bouton copier ID
+  if (interaction.customId.startsWith('copy_id_')) {
+    const userId = interaction.customId.split('_')[2];
     
+    await interaction.reply({
+      content: `📋 **Votre Discord User ID :**\n\`\`\`${userId}\`\`\`\n✅ Copiez cet ID et collez-le dans la note PayPal !`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
     // Bouton confirmer achat
     if (interaction.customId.startsWith('buy_confirm_')) {
       const days = parseInt(interaction.customId.split('_')[2]);
