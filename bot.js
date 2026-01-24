@@ -2397,6 +2397,7 @@ if (data.licenseKey || data.discordUserId) {
   }
 }
 }
+}
 // ========== HANDLERS PARRAINAGE ==========
 
 async function handleReferralCommand(interaction) {
