@@ -936,7 +936,7 @@ async function handleHelpCommand(interaction) {
 
   // ✅ MENU PRINCIPAL avec séparation claire
   if (!category) {
-    const isAdmin = ADMIN_USER_IDS.includes(interaction.user.id);
+    const isAdmin = ADMIN_IDS.includes(interaction.user.id);
 
     const mainEmbed = new EmbedBuilder()
       .setColor('#6366f1')
@@ -1153,7 +1153,7 @@ async function handleHelpCommand(interaction) {
   }
 
   // ✅ Vérifier si l'utilisateur a le droit d'accéder à cette catégorie
-  if (cat.adminOnly && !ADMIN_USER_IDS.includes(interaction.user.id)) {
+  if (cat.adminOnly && !ADMIN_IDS.includes(interaction.user.id)) {
     return interaction.reply({
       content: '❌ Cette section est réservée aux administrateurs.',
       flags: MessageFlags.Ephemeral
@@ -2139,7 +2139,7 @@ async function createUserLogChannel(discordUserId, username) {
             id: guild.id,
             deny: ['ViewChannel']
           },
-          ...ADMIN_USER_IDS.map(adminId => ({
+          ...ADMIN_IDS.map(adminId => ({
             id: adminId,
             allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
           }))
@@ -2164,7 +2164,7 @@ async function createUserLogChannel(discordUserId, username) {
           allow: ['ViewChannel', 'ReadMessageHistory'],
           deny: ['SendMessages']
         },
-        ...ADMIN_USER_IDS.map(adminId => ({
+        ...ADMIN_IDS.map(adminId => ({
           id: adminId,
           allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
         }))
