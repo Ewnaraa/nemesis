@@ -869,6 +869,59 @@ case 'reset-ips':
 });
 
 // ========== HANDLERS DES COMMANDES ==========
+
+// ==================== HANDLER SHOP COMMAND ====================
+async function handleShopCommand(interaction) {
+  try {
+    const balance = await getBalance(interaction.user.id);
+    
+    const embed = new EmbedBuilder()
+      .setColor('#6366f1')
+      .setTitle('💎 NEMESIS SHOP')
+      .setDescription(`💰 **Votre solde actuel :** ${balance.toFixed(2)}€\n\nSélectionnez une action ci-dessous`)
+      .setFooter({ text: 'Nemesis Vote • Shop' })
+      .setTimestamp();
+    
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('shop_menu')
+      .setPlaceholder('Sélectionnez une action...')
+      .addOptions([
+        {
+          label: 'Recharger mon solde',
+          description: 'Ajouter des fonds via PayPal',
+          value: 'recharge',
+          emoji: '💳'
+        },
+        {
+          label: 'Acheter une licence',
+          description: 'Acheter une licence avec votre solde',
+          value: 'buy',
+          emoji: '🛒'
+        },
+        {
+          label: 'Voir mon historique',
+          description: 'Historique de vos transactions',
+          value: 'history',
+          emoji: '📊'
+        }
+      ]);
+    
+    const row = new ActionRowBuilder().addComponents(menu);
+    
+    await interaction.reply({ 
+      embeds: [embed], 
+      components: [row],
+      flags: MessageFlags.Ephemeral 
+    });
+    
+  } catch (error) {
+    console.error('[SHOP] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors de l\'ouverture du shop.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
 // ==================== HANDLER MENU RECHARGE ====================
 async function handleRechargeMenu(interaction) {
   try {
