@@ -1,6 +1,50 @@
 // ========== DATABASE.JS - MODÈLES MONGODB ==========
 
 const mongoose = require('mongoose');
+const balanceSchema = new mongoose.Schema({
+  discordUserId: { 
+    type: String, 
+    required: true, 
+    unique: true,
+    index: true
+  },
+  balance: { 
+    type: Number, 
+    default: 0 
+  },
+  transactions: [{
+    type: { 
+      type: String, 
+      enum: ['credit', 'debit'],
+      required: true
+    },
+    amount: { 
+      type: Number, 
+      required: true 
+    },
+    reason: { 
+      type: String, 
+      required: true 
+    },
+    timestamp: { 
+      type: Date, 
+      default: Date.now 
+    },
+    paypalTransactionId: String,
+    licenseKey: String
+  }],
+  pendingRecharges: [{
+    amount: Number,
+    createdAt: Date,
+    expiresAt: Date
+  }],
+  createdAt: { 
+    type: Date, 
+    default: Date.now 
+  }
+});
+
+const Balance = mongoose.model('Balance', balanceSchema);
 
 const licenseSchema = new mongoose.Schema({
   key: {
@@ -664,5 +708,6 @@ module.exports = {
   getStats,
   sendSecurityAlert,
   License,
-  Log
+  Log,
+  Balance
 };
