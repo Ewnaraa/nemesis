@@ -2483,30 +2483,30 @@ async function sendLogToChannel(type, message, data = {}) {
       warning: '#f59e0b',
       info: '#6366f1'
     };
-
+    
     const emojis = {
       success: '✅',
       error: '❌',
       warning: '⚠️',
       info: 'ℹ️'
     };
-
+    
     const embed = new EmbedBuilder()
       .setColor(colors[type] || '#6366f1')
-      .setDescription(`${emojis[type]} ${message}`)
+      .setDescription(`${emojis[type]} ${message}`) // ✅ CORRIGÉ ICI
       .setTimestamp();
-
+    
     if (data.user) {
       embed.setAuthor({
         name: data.user,
         iconURL: data.avatar || null
       });
     }
-
+    
     if (data.fields) {
       embed.addFields(data.fields);
     }
-
+    
     // ✅ Envoyer dans le channel GLOBAL admin
     if (LOGS_CHANNEL_ID) {
       try {
@@ -2518,74 +2518,77 @@ async function sendLogToChannel(type, message, data = {}) {
         console.error('[LOGS] Erreur envoi channel global:', error);
       }
     }
-
+    
     // ✅ NOUVEAU : Envoyer dans le channel PRIVÉ de l'user
     if (data.licenseKey || data.discordUserId) {
-  try {
-    console.log('[LOGS] 🔍 Recherche licence pour channel privé:', {
-      licenseKey: data.licenseKey,
-      discordUserId: data.discordUserId
-    });
-    
-    const license = await License.findOne({
-      $or: [
-        { key: data.licenseKey },
-        { discordUserId: data.discordUserId }
-      ]
-    });
-    
-    console.log('[LOGS] 📋 Licence trouvée:', license ? 'OUI' : 'NON');
-    
-    if (license) {
-      console.log('[LOGS] 📊 logChannelId:', license.logChannelId);
-    }
-    
-    if (license && license.logChannelId) {
-      console.log('[LOGS] ✅ Tentative fetch channel:', license.logChannelId);
-      
-      const userChannel = await client.channels.fetch(license.logChannelId);
-      
-      if (userChannel) {
-        console.log('[LOGS] ✅ Channel trouvé:', userChannel.name);
+      try {
+        console.log('[LOGS] 🔍 Recherche licence pour channel privé:', {
+          licenseKey: data.licenseKey,
+          discordUserId: data.discordUserId
+        });
         
-        // ✅ CRÉER UN NOUVEL EMBED SANS IP
-        const userEmbed = new EmbedBuilder()
-          .setColor(embed.data.color)
-          .setDescription(embed.data.description)
-          .setTimestamp();
-
-        if (embed.data.author) {
-          userEmbed.setAuthor(embed.data.author);
+        const license = await License.findOne({
+          $or: [
+            { key: data.licenseKey },
+            { discordUserId: data.discordUserId }
+          ]
+        });
+        
+        console.log('[LOGS] 📋 Licence trouvée:', license ? 'OUI' : 'NON');
+        
+        if (license) {
+          console.log('[LOGS] 📊 logChannelId:', license.logChannelId);
         }
-
-        // ✅ FILTRER LES FIELDS - ENLEVER L'IP
-        if (data.fields && data.fields.length > 0) {
-          const userFields = data.fields.filter(field => {
-            const fieldName = field.name.toLowerCase();
-            return !fieldName.includes('ip') && !fieldName.includes('🌐');
-          });
+        
+        if (license && license.logChannelId) {
+          console.log('[LOGS] ✅ Tentative fetch channel:', license.logChannelId);
           
-          console.log('[LOGS] 📝 Fields filtrés:', userFields.length, '/', data.fields.length);
+          const userChannel = await client.channels.fetch(license.logChannelId);
           
-          if (userFields.length > 0) {
-            userEmbed.addFields(userFields);
+          if (userChannel) {
+            console.log('[LOGS] ✅ Channel trouvé:', userChannel.name);
+            
+            // ✅ CRÉER UN NOUVEL EMBED SANS IP
+            const userEmbed = new EmbedBuilder()
+              .setColor(embed.data.color)
+              .setDescription(embed.data.description)
+              .setTimestamp();
+            
+            if (embed.data.author) {
+              userEmbed.setAuthor(embed.data.author);
+            }
+            
+            // ✅ FILTRER LES FIELDS - ENLEVER L'IP
+            if (data.fields && data.fields.length > 0) {
+              const userFields = data.fields.filter(field => {
+                const fieldName = field.name.toLowerCase();
+                return !fieldName.includes('ip') && !fieldName.includes('🌐');
+              });
+              
+              console.log('[LOGS] 📝 Fields filtrés:', userFields.length, '/', data.fields.length);
+              
+              if (userFields.length > 0) {
+                userEmbed.addFields(userFields);
+              }
+            }
+            
+            await userChannel.send({ embeds: [userEmbed] });
+            console.log('[LOGS] ✅ Message envoyé dans channel privé (sans IP) !');
+          }
+        } else {
+          if (!license) {
+            console.log('[LOGS] ⚠️ Pas de licence trouvée');
+          } else if (!license.logChannelId) {
+            console.log('[LOGS] ⚠️ logChannelId = null pour cette licence');
           }
         }
-        
-        await userChannel.send({ embeds: [userEmbed] });
-        console.log('[LOGS] ✅ Message envoyé dans channel privé (sans IP) !');
-      }
-    } else {
-      if (!license) {
-        console.log('[LOGS] ⚠️ Pas de licence trouvée');
-      } else if (!license.logChannelId) {
-        console.log('[LOGS] ⚠️ logChannelId = null pour cette licence');
+      } catch (error) {
+        console.error('[LOGS] ❌ Erreur envoi channel user:', error);
       }
     }
+    
   } catch (error) {
-    console.error('[LOGS] ❌ Erreur envoi channel user:', error);
-  }
-}
+    console.error('[LOGS] Erreur envoi:', error);
   }
 }
 // ========== HANDLERS PARRAINAGE ==========
