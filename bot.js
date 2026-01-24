@@ -2586,6 +2586,8 @@ async function sendLogToChannel(type, message, data = {}) {
     console.error('[LOGS] ❌ Erreur envoi channel user:', error);
   }
 }
+  }
+}
 // ========== HANDLERS PARRAINAGE ==========
 
 async function handleReferralCommand(interaction) {
