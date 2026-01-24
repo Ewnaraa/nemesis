@@ -2282,12 +2282,23 @@ async function handleCleanupCommand(interaction) {
   }
 }
 
-// ✅ CRÉER UN CHANNEL PRIVÉ POUR L'UTILISATEUR
 async function createUserLogChannel(discordUserId, username) {
   try {
-const guild = client.guilds.cache.get(GUILD_ID);
+    const GUILD_ID = '1462219100171534551'; // Ton serveur
+    const guild = client.guilds.cache.get(GUILD_ID);
+    
     if (!guild) {
       console.error('[CHANNEL] Serveur Discord introuvable');
+      return null;
+    }
+
+    // ✅ FETCH LE MEMBRE AVANT
+    let member;
+    try {
+      member = await guild.members.fetch(discordUserId);
+      console.log(`[CHANNEL] Membre ${username} trouvé sur le serveur`);
+    } catch (error) {
+      console.error(`[CHANNEL] ❌ Utilisateur ${username} (${discordUserId}) pas sur le serveur`);
       return null;
     }
 
@@ -2304,13 +2315,28 @@ const guild = client.guilds.cache.get(GUILD_ID);
       return existingChannel;
     }
 
-    // Trouver ou créer la catégorie "NEMESIS LOGS"
+    // Trouver ou créer la catégorie
     let category = guild.channels.cache.find(
       ch => ch.type === ChannelType.GuildCategory && ch.name === '📁 NEMESIS LOGS'
     );
 
     if (!category) {
       console.log('[CHANNEL] Création de la catégorie NEMESIS LOGS...');
+      
+      // ✅ FETCH LES ADMINS AUSSI
+      const adminPermissions = [];
+      for (const adminId of ADMIN_IDS) {
+        try {
+          await guild.members.fetch(adminId);
+          adminPermissions.push({
+            id: adminId,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
+          });
+        } catch (error) {
+          console.warn(`[CHANNEL] Admin ${adminId} pas sur le serveur, skip`);
+        }
+      }
+      
       category = await guild.channels.create({
         name: '📁 NEMESIS LOGS',
         type: ChannelType.GuildCategory,
@@ -2319,12 +2345,23 @@ const guild = client.guilds.cache.get(GUILD_ID);
             id: guild.id,
             deny: ['ViewChannel']
           },
-          ...ADMIN_IDS.map(adminId => ({
-            id: adminId,
-            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
-          }))
+          ...adminPermissions
         ]
       });
+    }
+
+    // ✅ FETCH LES ADMINS POUR LE CHANNEL AUSSI
+    const channelAdminPermissions = [];
+    for (const adminId of ADMIN_IDS) {
+      try {
+        await guild.members.fetch(adminId);
+        channelAdminPermissions.push({
+          id: adminId,
+          allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
+        });
+      } catch (error) {
+        console.warn(`[CHANNEL] Admin ${adminId} pas sur le serveur, skip`);
+      }
     }
 
     // Créer le channel privé
@@ -2344,10 +2381,7 @@ const guild = client.guilds.cache.get(GUILD_ID);
           allow: ['ViewChannel', 'ReadMessageHistory'],
           deny: ['SendMessages']
         },
-        ...ADMIN_IDS.map(adminId => ({
-          id: adminId,
-          allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels']
-        }))
+        ...channelAdminPermissions
       ]
     });
 
