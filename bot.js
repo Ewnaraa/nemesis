@@ -2351,29 +2351,51 @@ async function sendLogToChannel(type, message, data = {}) {
     }
 
     // ✅ NOUVEAU : Envoyer dans le channel PRIVÉ de l'user
-    if (data.licenseKey || data.discordUserId) {
-      try {
-        const license = await License.findOne({
-          $or: [
-            { key: data.licenseKey },
-            { discordUserId: data.discordUserId }
-          ]
-        });
-
-        if (license && license.logChannelId) {
-          const userChannel = await client.channels.fetch(license.logChannelId);
-          if (userChannel) {
-            await userChannel.send({ embeds: [embed] });
-          }
-        }
-      } catch (error) {
-        console.error('[LOGS] Erreur envoi channel user:', error);
+if (data.licenseKey || data.discordUserId) {
+  try {
+    console.log('[LOGS] 🔍 Recherche licence pour channel privé:', {
+      licenseKey: data.licenseKey,
+      discordUserId: data.discordUserId
+    });
+    
+    const license = await License.findOne({
+      $or: [
+        { key: data.licenseKey },
+        { discordUserId: data.discordUserId }
+      ]
+    });
+    
+    console.log('[LOGS] 📋 Licence trouvée:', license ? 'OUI' : 'NON');
+    
+    if (license) {
+      console.log('[LOGS] 📊 logChannelId:', license.logChannelId);
+      console.log('[LOGS] 👤 username:', license.username);
+      console.log('[LOGS] 🆔 discordUserId:', license.discordUserId);
+    }
+    
+    if (license && license.logChannelId) {
+      console.log('[LOGS] ✅ Tentative fetch channel:', license.logChannelId);
+      
+      const userChannel = await client.channels.fetch(license.logChannelId);
+      
+      if (userChannel) {
+        console.log('[LOGS] ✅ Channel trouvé:', userChannel.name);
+        await userChannel.send({ embeds: [embed] });
+        console.log('[LOGS] ✅ Message envoyé dans channel privé !');
+      } else {
+        console.log('[LOGS] ❌ Channel fetch = null');
+      }
+    } else {
+      if (!license) {
+        console.log('[LOGS] ⚠️ Pas de licence trouvée');
+      } else if (!license.logChannelId) {
+        console.log('[LOGS] ⚠️ logChannelId = null pour cette licence');
       }
     }
-
   } catch (error) {
-    console.error('[LOGS] Erreur envoi:', error);
+    console.error('[LOGS] ❌ Erreur envoi channel user:', error);
   }
+}
 }
 // ========== HANDLERS PARRAINAGE ==========
 
