@@ -212,9 +212,6 @@ app.get('/api/license/:key', async (req, res) => {
 });
 
 // ========== DISCORD COMMANDS ==========
-new SlashCommandBuilder()
-  .setName('changelog')
-  .setDescription('📋 Voir les dernières mises à jour'),
 
 const commands = [
   // Commande /buy
@@ -257,6 +254,9 @@ const commands = [
   ),
   
   // ========== COMMANDES ADMIN ==========
+  new SlashCommandBuilder()
+  .setName('changelog')
+  .setDescription('📋 Voir les dernières mises à jour'),
   
   new SlashCommandBuilder()
   .setName('clean-invalid')
