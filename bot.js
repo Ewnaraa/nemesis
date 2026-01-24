@@ -1253,36 +1253,22 @@ async function handleHistoryMenu(interaction) {
       components: []
     });
   }
-}
-    
-    const row = new ActionRowBuilder().addComponents(menu);
-    
-    await interaction.reply({ 
-      embeds: [embed], 
-      components: [row],
-      flags: MessageFlags.Ephemeral 
-    });
-    
-  } catch (error) {
-    console.error('[SHOP] Erreur:', error);
-    await interaction.reply({
-      content: '❌ Erreur lors de l\'ouverture du shop.',
-      flags: MessageFlags.Ephemeral
-    });
-  }
-}
+} // ✅ ACCOLADE FERMANTE ICI
+
+// ✅ SUPPRIME TOUT CE CODE ORPHELIN (lignes avec "const row" etc.)
+
 async function handleFixChannelsCommand(interaction) {
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
+    
     const licenses = await License.find({ 
       status: 'active',
-      logChannelId: null // Seulement celles sans channel
+      logChannelId: null
     });
-
+    
     let created = 0;
     let errors = 0;
-
+    
     for (const license of licenses) {
       try {
         const channel = await createUserLogChannel(license.discordUserId, license.username);
@@ -1301,12 +1287,12 @@ async function handleFixChannelsCommand(interaction) {
         console.error(`[FIX-CHANNELS] Erreur pour ${license.username}:`, error);
       }
     }
-
+    
     await interaction.editReply({
       content: `✅ Terminé !\n\n📊 Channels créés : ${created}\n❌ Erreurs : ${errors}\n📋 Total licences : ${licenses.length}`,
       flags: MessageFlags.Ephemeral
     });
-
+    
   } catch (error) {
     console.error('[FIX-CHANNELS] Erreur:', error);
     await interaction.editReply({
