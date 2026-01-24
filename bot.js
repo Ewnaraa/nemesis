@@ -636,19 +636,39 @@ client.on('interactionCreate', async (interaction) => {
         break;
         
       case 'changelog':
-  const version = "2.6.1";
-  const data = changelogData[version];
-  const embed = new EmbedBuilder()
+  const latestVersion = "2.6.1";
+  const changelogInfo = changelogData[latestVersion];
+  
+  if (!changelogInfo) {
+    return interaction.reply({
+      content: '❌ Changelog introuvable.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+  
+  const changelogEmbed = new EmbedBuilder()
     .setColor('#10b981')
-    .setTitle(`${data.title} - v${version}`)
-    .setDescription(data.description)
+    .setTitle(`${changelogInfo.title} - v${latestVersion}`)
+    .setDescription(changelogInfo.description)
     .addFields(
-      { name: '✨ Nouveautés', value: data.features.join('\n') },
-      { name: '⚡ Améliorations', value: data.improvements.join('\n') }
+      { 
+        name: '✨ Nouveautés', 
+        value: changelogInfo.features.join('\n'), 
+        inline: false 
+      },
+      { 
+        name: '⚡ Améliorations', 
+        value: changelogInfo.improvements.join('\n'), 
+        inline: false 
+      }
     )
-    .setFooter({ text: `Nemesis Vote • ${data.date}` })
+    .setFooter({ text: `Nemesis Vote • ${changelogInfo.date}` })
     .setTimestamp();
-  await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  
+  await interaction.reply({ 
+    embeds: [changelogEmbed], 
+    flags: MessageFlags.Ephemeral 
+  });
   break;
         
       case 'license':
