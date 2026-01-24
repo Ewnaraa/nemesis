@@ -662,12 +662,12 @@ client.on('interactionCreate', async (interaction) => {
         inline: false 
       }
     )
-    .setFooter({ text: `Nemesis Vote • ${changelogInfo.date}` })
+    .setFooter({ text: `Nemesis Vote • ${changelogInfo.date} • Demandé par ${interaction.user.username}` })
     .setTimestamp();
   
   await interaction.reply({ 
-    embeds: [changelogEmbed], 
-    flags: MessageFlags.Ephemeral 
+    embeds: [changelogEmbed]
+    // ✅ Plus de flags: MessageFlags.Ephemeral = message PUBLIC
   });
   break;
         
