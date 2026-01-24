@@ -242,6 +242,9 @@ const commands = [
   
   // ========== COMMANDES ADMIN ==========
   
+  new SlashCommandBuilder()
+  .setName('clean-invalid')
+  .setDescription('[ADMIN] Supprimer les licences corrompues (sans discordUserId ou expiresAt)'),
   // Commande /generate
   new SlashCommandBuilder()
     .setName('generate')
@@ -642,7 +645,9 @@ client.on('interactionCreate', async (interaction) => {
         case 'mylogs':
   await handleMyLogsCommand(interaction);
   break;
-        
+        case 'clean-invalid':
+  await handleCleanInvalidCommand(interaction);
+  break;
       case 'stats':
         await handleStatsCommand(interaction);
         break;
@@ -1356,6 +1361,33 @@ client.on('interactionCreate', async (interaction) => {
     await handleHelpCommand(interaction);
   }
 });
+async function handleCleanInvalidCommand(interaction) {
+  try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const result = await License.deleteMany({
+      $or: [
+        { discordUserId: { $exists: false } },
+        { discordUserId: null },
+        { discordUserId: '' },
+        { expiresAt: { $exists: false } },
+        { expiresAt: null }
+      ]
+    });
+
+    await interaction.editReply({
+      content: `✅ ${result.deletedCount} licence(s) corrompue(s) supprimée(s)`,
+      flags: MessageFlags.Ephemeral
+    });
+
+  } catch (error) {
+    console.error('[CLEAN-INVALID] Erreur:', error);
+    await interaction.editReply({
+      content: '❌ Erreur lors du nettoyage.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
 
 async function handleGenerateCommand(interaction) {
   try {
