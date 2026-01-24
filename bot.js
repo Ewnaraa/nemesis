@@ -93,7 +93,6 @@ app.get('/', (req, res) => {
 app.post('/api/verify', async (req, res) => {
   const { key, discordUserId, isRealUsage } = req.body;
   
-  // ✅ Récupérer la vraie IP (pas celle de Railway)
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
              req.headers['x-real-ip'] || 
              req.ip;
@@ -112,25 +111,23 @@ app.post('/api/verify', async (req, res) => {
   
   const result = await verifyLicense(key, ip, discordUserId, isRealUsage || false);
   
-  // ✅ AJOUTE ICI - Logs Discord après vérification
+  // ✅ LOGS DISCORD
   if (result.valid && isRealUsage) {
-    // Vote réussi
     await sendLogToChannel('success', `Vote réussi`, {
       user: result.license.username,
+      licenseKey: key, // ✅ Pour envoyer dans channel user
       fields: [
-        { name: 'Clé', value: `\`${key.substring(0, 9)}...\``, inline: true },
+        { name: 'Serveur', value: req.body.serverId || 'Inconnu', inline: true },
         { name: 'Total Votes', value: `${result.license.usageCount}`, inline: true },
         { name: 'IP', value: ip, inline: true }
       ]
     });
-    
   } else if (!result.valid) {
-    // Vote échoué
     await sendLogToChannel('error', `Vote échoué`, {
+      discordUserId: discordUserId, // ✅ Pour envoyer dans channel user
       fields: [
         { name: 'Clé', value: `\`${key.substring(0, 9)}...\``, inline: true },
-        { name: 'Erreur', value: result.error, inline: true },
-        { name: 'Discord ID', value: discordUserId, inline: true }
+        { name: 'Erreur', value: result.error, inline: true }
       ]
     });
   }
