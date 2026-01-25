@@ -627,141 +627,192 @@ async function handleMenuAction(interaction, action) {
         break;
         
       case 'check':
-        // Vérifier la licence
-        const license = await License.findOne({
-          discordUserId: interaction.user.id,
-          status: 'active'
-        });
-        
-        if (!license) {
-          return await interaction.update({
-            content: '❌ Vous n\'avez pas de licence active.',
-            embeds: [],
-            components: []
-          });
-        }
-        
-        const daysRemaining = Math.ceil((license.expiresAt - Date.now()) / (1000 * 60 * 60 * 24));
-        
-        const checkEmbed = new EmbedBuilder()
-          .setColor('#10b981')
-          .setTitle('📋 Votre Licence')
-          .addFields(
-            { name: '🔑 Clé', value: `\`${license.key}\``, inline: false },
-            { name: '👤 Utilisateur', value: license.username, inline: true },
-            { name: '📅 Expire dans', value: `${daysRemaining} jours`, inline: true },
-            { name: '🎮 Votes effectués', value: `${license.usageCount || 0}`, inline: true },
-            { name: '📆 Créée le', value: `<t:${Math.floor(license.createdAt.getTime() / 1000)}:D>`, inline: true },
-            { name: '📆 Expire le', value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:D>`, inline: true }
-          )
-          .setFooter({ text: 'Nemesis Vote' })
-          .setTimestamp();
-        
-        await interaction.update({
-          embeds: [checkEmbed],
-          components: []
-        });
-        break;
+  // Vérifier la licence
+  const license = await License.findOne({
+    discordUserId: interaction.user.id,
+    status: 'active'
+  });
+  
+  if (!license) {
+    // ✅ AJOUTER BOUTON RETOUR
+    const backButton = new ButtonBuilder()
+      .setCustomId('menu_back')
+      .setLabel('← Retour au menu')
+      .setStyle(ButtonStyle.Secondary);
+    
+    const row = new ActionRowBuilder().addComponents(backButton);
+    
+    return await interaction.update({
+      content: '❌ Vous n\'avez pas de licence active.',
+      embeds: [],
+      components: [row]  // ✅ Au lieu de []
+    });
+  }
+  
+  const daysRemaining = Math.ceil((license.expiresAt - Date.now()) / (1000 * 60 * 60 * 24));
+  
+  const checkEmbed = new EmbedBuilder()
+    .setColor('#10b981')
+    .setTitle('📋 Votre Licence')
+    .addFields(
+      { name: '🔑 Clé', value: `\`${license.key}\``, inline: false },
+      { name: '👤 Utilisateur', value: license.username, inline: true },
+      { name: '📅 Expire dans', value: `${daysRemaining} jours`, inline: true },
+      { name: '🎮 Votes effectués', value: `${license.usageCount || 0}`, inline: true },
+      { name: '📆 Créée le', value: `<t:${Math.floor(license.createdAt.getTime() / 1000)}:D>`, inline: true },
+      { name: '📆 Expire le', value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:D>`, inline: true }
+    )
+    .setFooter({ text: 'Nemesis Vote' })
+    .setTimestamp();
+  
+  // ✅ AJOUTER BOUTON RETOUR
+  const backButton2 = new ButtonBuilder()
+    .setCustomId('menu_back')
+    .setLabel('← Retour au menu')
+    .setStyle(ButtonStyle.Secondary);
+  
+  const row2 = new ActionRowBuilder().addComponents(backButton2);
+  
+  await interaction.update({
+    embeds: [checkEmbed],
+    components: [row2]  // ✅ Au lieu de []
+  });
+  break;
         
       case 'logs':
-        // Accéder au channel privé
-        const logLicense = await License.findOne({
-          discordUserId: interaction.user.id,
-          status: 'active'
-        });
-        
-        if (!logLicense) {
-          return await interaction.update({
-            content: '❌ Vous devez avoir une licence active.',
-            embeds: [],
-            components: []
-          });
-        }
-        
-        if (!logLicense.logChannelId) {
-          const channel = await createUserLogChannel(interaction.user.id, interaction.user.username);
-          if (channel) {
-            logLicense.logChannelId = channel.id;
-            await logLicense.save();
-            
-            await interaction.update({
-              content: `✅ Votre channel privé a été créé !\n\n📺 Accédez-y ici : <#${channel.id}>`,
-              embeds: [],
-              components: []
-            });
-          }
-        } else {
-          await interaction.update({
-            content: `📺 Votre channel privé : <#${logLicense.logChannelId}>`,
-            embeds: [],
-            components: []
-          });
-        }
-        break;
-        
-      case 'stats':
-        // Statistiques détaillées
-        const statsLicense = await License.findOne({
-          discordUserId: interaction.user.id,
-          status: 'active'
-        });
-        
-        if (!statsLicense) {
-          return await interaction.update({
-            content: '❌ Vous devez avoir une licence active.',
-            embeds: [],
-            components: []
-          });
-        }
-        
-        const statsEmbed = new EmbedBuilder()
-          .setColor('#8b5cf6')
-          .setTitle('📊 Vos Statistiques')
-          .addFields(
-            { name: '🎮 Total votes', value: `${statsLicense.usageCount || 0}`, inline: true },
-            { name: '✅ Vérifications', value: `${statsLicense.verificationCount || 0}`, inline: true },
-            { name: '📅 Membre depuis', value: `<t:${Math.floor(statsLicense.createdAt.getTime() / 1000)}:R>`, inline: true },
-            { name: '🕒 Dernier vote', value: statsLicense.lastUsedAt ? `<t:${Math.floor(statsLicense.lastUsedAt.getTime() / 1000)}:R>` : 'Jamais', inline: true }
-          )
-          .setFooter({ text: 'Nemesis Vote' })
-          .setTimestamp();
-        
-        await interaction.update({
-          embeds: [statsEmbed],
-          components: []
-        });
-        break;
-        
-      case 'history':
-        await handleHistoryMenu(interaction);
-        break;
-        
-      case 'referral':
-        // Code de parrainage
-        const referralCount = await License.countDocuments({
-          referredBy: interaction.user.id,
-          status: 'active'
-        });
-        
-        const discount = Math.min(referralCount * 10, 50); // Max 50%
-        
-        const referralEmbed = new EmbedBuilder()
-          .setColor('#10b981')
-          .setTitle('🎁 Votre Code de Parrainage')
-          .setDescription(`Partagez votre Discord User ID pour parrainer vos amis !`)
-          .addFields(
-            { name: '🔢 Votre code', value: `\`${interaction.user.id}\``, inline: false },
-            { name: '👥 Filleuls actifs', value: `${referralCount}`, inline: true },
-            { name: '💰 Réduction actuelle', value: `${discount}%`, inline: true }
-          )
-          .setFooter({ text: 'Nemesis Vote • Gagnez 10% par filleul (max 50%)' })
-          .setTimestamp();
-        
-        await interaction.update({
-          embeds: [referralEmbed],
-          components: []
-        });
-        break;
+  const logLicense = await License.findOne({
+    discordUserId: interaction.user.id,
+    status: 'active'
+  });
+  
+  if (!logLicense) {
+    const backButton = new ButtonBuilder()
+      .setCustomId('menu_back')
+      .setLabel('← Retour au menu')
+      .setStyle(ButtonStyle.Secondary);
+    
+    const row = new ActionRowBuilder().addComponents(backButton);
+    
+    return await interaction.update({
+      content: '❌ Vous devez avoir une licence active.',
+      embeds: [],
+      components: [row]
+    });
+  }
+  
+  if (!logLicense.logChannelId) {
+    const channel = await createUserLogChannel(interaction.user.id, interaction.user.username);
+    if (channel) {
+      logLicense.logChannelId = channel.id;
+      await logLicense.save();
+      
+      const backButton = new ButtonBuilder()
+        .setCustomId('menu_back')
+        .setLabel('← Retour au menu')
+        .setStyle(ButtonStyle.Secondary);
+      
+      const row = new ActionRowBuilder().addComponents(backButton);
+      
+      await interaction.update({
+        content: `✅ Votre channel privé a été créé !\n\n📺 Accédez-y ici : <#${channel.id}>`,
+        embeds: [],
+        components: [row]
+      });
+    }
+  } else {
+    const backButton = new ButtonBuilder()
+      .setCustomId('menu_back')
+      .setLabel('← Retour au menu')
+      .setStyle(ButtonStyle.Secondary);
+    
+    const row = new ActionRowBuilder().addComponents(backButton);
+    
+    await interaction.update({
+      content: `📺 Votre channel privé : <#${logLicense.logChannelId}>`,
+      embeds: [],
+      components: [row]
+    });
+  }
+  break;
+
+case 'stats':
+  const statsLicense = await License.findOne({
+    discordUserId: interaction.user.id,
+    status: 'active'
+  });
+  
+  if (!statsLicense) {
+    const backButton = new ButtonBuilder()
+      .setCustomId('menu_back')
+      .setLabel('← Retour au menu')
+      .setStyle(ButtonStyle.Secondary);
+    
+    const row = new ActionRowBuilder().addComponents(backButton);
+    
+    return await interaction.update({
+      content: '❌ Vous devez avoir une licence active.',
+      embeds: [],
+      components: [row]
+    });
+  }
+  
+  const statsEmbed = new EmbedBuilder()
+    .setColor('#8b5cf6')
+    .setTitle('📊 Vos Statistiques')
+    .addFields(
+      { name: '🎮 Total votes', value: `${statsLicense.usageCount || 0}`, inline: true },
+      { name: '✅ Vérifications', value: `${statsLicense.verificationCount || 0}`, inline: true },
+      { name: '📅 Membre depuis', value: `<t:${Math.floor(statsLicense.createdAt.getTime() / 1000)}:R>`, inline: true },
+      { name: '🕒 Dernier vote', value: statsLicense.lastUsedAt ? `<t:${Math.floor(statsLicense.lastUsedAt.getTime() / 1000)}:R>` : 'Jamais', inline: true }
+    )
+    .setFooter({ text: 'Nemesis Vote' })
+    .setTimestamp();
+  
+  const backButton3 = new ButtonBuilder()
+    .setCustomId('menu_back')
+    .setLabel('← Retour au menu')
+    .setStyle(ButtonStyle.Secondary);
+  
+  const row3 = new ActionRowBuilder().addComponents(backButton3);
+  
+  await interaction.update({
+    embeds: [statsEmbed],
+    components: [row3]
+  });
+  break;
+
+case 'referral':
+  const referralCount = await License.countDocuments({
+    referredBy: interaction.user.id,
+    status: 'active'
+  });
+  
+  const discount = Math.min(referralCount * 10, 50);
+  
+  const referralEmbed = new EmbedBuilder()
+    .setColor('#10b981')
+    .setTitle('🎁 Votre Code de Parrainage')
+    .setDescription(`Partagez votre Discord User ID pour parrainer vos amis !`)
+    .addFields(
+      { name: '🔢 Votre code', value: `\`${interaction.user.id}\``, inline: false },
+      { name: '👥 Filleuls actifs', value: `${referralCount}`, inline: true },
+      { name: '💰 Réduction actuelle', value: `${discount}%`, inline: true }
+    )
+    .setFooter({ text: 'Nemesis Vote • Gagnez 10% par filleul (max 50%)' })
+    .setTimestamp();
+  
+  const backButton4 = new ButtonBuilder()
+    .setCustomId('menu_back')
+    .setLabel('← Retour au menu')
+    .setStyle(ButtonStyle.Secondary);
+  
+  const row4 = new ActionRowBuilder().addComponents(backButton4);
+  
+  await interaction.update({
+    embeds: [referralEmbed],
+    components: [row4]
+  });
+  break;
     }
     
   } catch (error) {
@@ -1161,58 +1212,86 @@ async function handleAdminAction(interaction, action) {
         });
         break;
         
-      case 'cleanup':
-        // Cleanup licences expirées
-        await interaction.deferUpdate();
-        
-        const expiredDate = new Date();
-        expiredDate.setDate(expiredDate.getDate() - 7);
-        
-        const result = await License.deleteMany({
-          status: 'expired',
-          expiresAt: { $lt: expiredDate }
-        });
-        
-        await interaction.editReply({
-          content: `🧹 **Cleanup effectué**\n\n✅ ${result.deletedCount} licence(s) expirée(s) supprimée(s) (>7 jours)`,
-          embeds: [],
-          components: []
-        });
-        break;
+     case 'cleanup':
+  // ✅ DEMANDER CONFIRMATION D'ABORD
+  const confirmEmbed = new EmbedBuilder()
+    .setColor('#f59e0b')
+    .setTitle('⚠️ Confirmation requise')
+    .setDescription('Voulez-vous vraiment supprimer toutes les licences expirées depuis plus de 7 jours ?')
+    .addFields(
+      { name: '🗑️ Action', value: 'Suppression définitive', inline: true },
+      { name: '⏰ Critère', value: 'Expirées > 7 jours', inline: true }
+    )
+    .setFooter({ text: 'Cette action est irréversible' });
+  
+  const confirmBtn = new ButtonBuilder()
+    .setCustomId('cleanup_confirm')
+    .setLabel('✅ Confirmer')
+    .setStyle(ButtonStyle.Danger);
+  
+  const cancelBtn = new ButtonBuilder()
+    .setCustomId('cleanup_cancel')
+    .setLabel('❌ Annuler')
+    .setStyle(ButtonStyle.Secondary);
+  
+  const row = new ActionRowBuilder().addComponents(confirmBtn, cancelBtn);
+  
+  await interaction.update({
+    embeds: [confirmEmbed],
+    components: [row]
+  });
+  break;
         
       // ========== MAINTENANCE ==========
       case 'fix_channels':
-        await interaction.deferUpdate();
-        
-        const licenses = await License.find({ 
-          status: 'active',
-          logChannelId: null
-        });
-        
-        let created = 0;
-        let errors = 0;
-        
-        for (const license of licenses) {
-          try {
-            const channel = await createUserLogChannel(license.discordUserId, license.username);
-            if (channel) {
-              license.logChannelId = channel.id;
-              await license.save();
-              created++;
-            } else {
-              errors++;
-            }
-          } catch (error) {
-            errors++;
-          }
-        }
-        
-        await interaction.editReply({
-          content: `📺 **Fix channels terminé**\n\n✅ Créés : ${created}\n❌ Erreurs : ${errors}\n📋 Total : ${licenses.length}`,
-          embeds: [],
-          components: []
-        });
-        break;
+  await interaction.deferUpdate();  // ✅ Affiche "Bot réfléchit..."
+  
+  const licenses = await License.find({ 
+    status: 'active',
+    logChannelId: null
+  });
+  
+  let created = 0;
+  let errors = 0;
+  
+  for (const license of licenses) {
+    try {
+      const channel = await createUserLogChannel(license.discordUserId, license.username);
+      if (channel) {
+        license.logChannelId = channel.id;
+        await license.save();
+        created++;
+      } else {
+        errors++;
+      }
+    } catch (error) {
+      errors++;
+    }
+  }
+  
+  const resultEmbed = new EmbedBuilder()
+    .setColor(errors > 0 ? '#f59e0b' : '#10b981')
+    .setTitle('📺 Fix Channels - Terminé')
+    .addFields(
+      { name: '✅ Créés', value: `${created}`, inline: true },
+      { name: '❌ Erreurs', value: `${errors}`, inline: true },
+      { name: '📋 Total', value: `${licenses.length}`, inline: true }
+    )
+    .setFooter({ text: 'Nemesis Vote • Maintenance' })
+    .setTimestamp();
+  
+  const backBtn = new ButtonBuilder()
+    .setCustomId('admin_back_maintenance')
+    .setLabel('← Retour')
+    .setStyle(ButtonStyle.Secondary);
+  
+  const backRow = new ActionRowBuilder().addComponents(backBtn);
+  
+  await interaction.editReply({
+    embeds: [resultEmbed],
+    components: [backRow]
+  });
+  break;
         
       case 'clean_invalid':
         await interaction.deferUpdate();
@@ -1813,53 +1892,97 @@ function generateLicenseKey() {
 }
 
 // ==================== HANDLER HISTORIQUE ====================
-async function handleHistoryMenu(interaction) {
+async function handleHistoryMenu(interaction, page = 1) {
   try {
-    const transactions = await getTransactionHistory(interaction.user.id, 10);
     const balance = await getBalance(interaction.user.id);
+    const history = await getTransactionHistory(interaction.user.id);
     
-    if (transactions.length === 0) {
-      const embed = new EmbedBuilder()
-        .setColor('#6366f1')
-        .setTitle('📊 HISTORIQUE DES TRANSACTIONS')
-        .setDescription('Aucune transaction pour le moment.')
-        .addFields({ 
-          name: '💰 Solde actuel', 
-          value: `${balance.toFixed(2)}€`, 
-          inline: true 
-        })
-        .setFooter({ text: 'Nemesis Vote • Historique' })
-        .setTimestamp();
+    if (!history || history.length === 0) {
+      const backButton = new ButtonBuilder()
+        .setCustomId('menu_back')
+        .setLabel('← Retour au menu')
+        .setStyle(ButtonStyle.Secondary);
       
-      return await interaction.update({ 
-        embeds: [embed], 
-        components: []
+      const row = new ActionRowBuilder().addComponents(backButton);
+      
+      return await interaction.update({
+        content: '📜 Aucune transaction dans votre historique.',
+        embeds: [],
+        components: [row]
       });
     }
     
-    const historyText = transactions.map(tx => {
+    // ✅ PAGINATION
+    const itemsPerPage = 10;
+    const totalPages = Math.ceil(history.length / itemsPerPage);
+    const currentPage = Math.max(1, Math.min(page, totalPages));
+    
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const pageItems = history.slice(startIndex, endIndex);
+    
+    const historyText = pageItems.map(tx => {
       const emoji = tx.type === 'credit' ? '✅' : '❌';
       const sign = tx.type === 'credit' ? '+' : '-';
-      const date = `<t:${Math.floor(tx.timestamp.getTime() / 1000)}:d>`;
+      const date = new Date(tx.timestamp);
+      const dateStr = `<t:${Math.floor(date.getTime() / 1000)}:R>`;
       
-      return `${emoji} ${sign}${tx.amount.toFixed(2)}€ - ${tx.reason} (${date})`;
+      return `${emoji} ${sign}${tx.amount.toFixed(2)}€ - ${tx.reason} (${dateStr})`;
     }).join('\n');
     
     const embed = new EmbedBuilder()
       .setColor('#6366f1')
-      .setTitle('📊 HISTORIQUE DES TRANSACTIONS')
+      .setTitle('📜 Historique des Transactions')
       .setDescription(historyText)
-      .addFields({ 
-        name: '💰 Solde actuel', 
-        value: `${balance.toFixed(2)}€`, 
-        inline: true 
-      })
-      .setFooter({ text: 'Nemesis Vote • Historique (10 dernières transactions)' })
+      .addFields(
+        { name: '💰 Solde actuel', value: `${balance.toFixed(2)}€`, inline: true },
+        { name: '📊 Page', value: `${currentPage}/${totalPages}`, inline: true },
+        { name: '📝 Total', value: `${history.length} transaction(s)`, inline: true }
+      )
+      .setFooter({ text: 'Nemesis Vote • Historique' })
       .setTimestamp();
     
-    await interaction.update({ 
-      embeds: [embed], 
-      components: []
+    // ✅ BOUTONS DE NAVIGATION
+    const components = [];
+    
+    // Boutons Précédent/Suivant
+    if (totalPages > 1) {
+      const navButtons = new ActionRowBuilder();
+      
+      const prevBtn = new ButtonBuilder()
+        .setCustomId(`history_prev_${currentPage}`)
+        .setLabel('◀️ Précédent')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage === 1);
+      
+      const pageBtn = new ButtonBuilder()
+        .setCustomId('history_page_info')
+        .setLabel(`Page ${currentPage}/${totalPages}`)
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(true);
+      
+      const nextBtn = new ButtonBuilder()
+        .setCustomId(`history_next_${currentPage}`)
+        .setLabel('Suivant ▶️')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage === totalPages);
+      
+      navButtons.addComponents(prevBtn, pageBtn, nextBtn);
+      components.push(navButtons);
+    }
+    
+    // Bouton Retour
+    const backButton = new ButtonBuilder()
+      .setCustomId('menu_back')
+      .setLabel('← Retour au menu')
+      .setStyle(ButtonStyle.Secondary);
+    
+    const backRow = new ActionRowBuilder().addComponents(backButton);
+    components.push(backRow);
+    
+    await interaction.update({
+      embeds: [embed],
+      components: components
     });
     
   } catch (error) {
@@ -2633,13 +2756,90 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     
     if (interaction.customId === 'recharge_sent') {
-      await interaction.update({
-        content: '✅ Parfait ! Dès réception du paiement PayPal, votre solde sera crédité automatiquement.\n\n⏰ Cela peut prendre quelques minutes.',
-        embeds: [],
-        components: []
-      });
-    }
-    
+  const successEmbed = new EmbedBuilder()
+    .setColor('#10b981')
+    .setTitle('✅ Paiement enregistré')
+    .setDescription('Votre demande de rechargement a été prise en compte !')
+    .addFields(
+      { name: '⏰ Délai', value: 'Quelques minutes', inline: true },
+      { name: '🔔 Notification', value: 'Vous serez notifié par DM', inline: true }
+    )
+    .setFooter({ text: 'Nemesis Vote • Rechargement' })
+    .setTimestamp();
+  
+  const backButton = new ButtonBuilder()
+    .setCustomId('menu_back')
+    .setLabel('← Retour au menu')
+    .setStyle(ButtonStyle.Secondary);
+  
+  const row = new ActionRowBuilder().addComponents(backButton);
+  
+  await interaction.update({
+    content: null,
+    embeds: [successEmbed],
+    components: [row]
+  });
+}
+    // Dans client.on('interactionCreate'), section isButton
+ if (interaction.customId === 'menu_back') {
+  await handleMenuCommand(interaction);
+}
+if (interaction.customId.startsWith('history_prev_')) {
+  const currentPage = parseInt(interaction.customId.split('_')[2]);
+  await handleHistoryMenu(interaction, currentPage - 1);
+}
+
+if (interaction.customId.startsWith('history_next_')) {
+  const currentPage = parseInt(interaction.customId.split('_')[2]);
+  await handleHistoryMenu(interaction, currentPage + 1);
+}
+    if (interaction.customId === 'cleanup_confirm') {
+  await interaction.update({
+    content: '⏳ Nettoyage en cours...',
+    embeds: [],
+    components: []
+  });
+  
+  const expiredDate = new Date();
+  expiredDate.setDate(expiredDate.getDate() - 7);
+  
+  const result = await License.deleteMany({
+    status: 'expired',
+    expiresAt: { $lt: expiredDate }
+  });
+  
+  const successEmbed = new EmbedBuilder()
+    .setColor('#10b981')
+    .setTitle('✅ Nettoyage terminé')
+    .setDescription(`${result.deletedCount} licence(s) supprimée(s)`)
+    .setFooter({ text: 'Nemesis Vote • Cleanup' })
+    .setTimestamp();
+  
+  const backBtn = new ButtonBuilder()
+    .setCustomId('admin_back_maintenance')
+    .setLabel('← Retour')
+    .setStyle(ButtonStyle.Secondary);
+  
+  const backRow = new ActionRowBuilder().addComponents(backBtn);
+  
+  await interaction.editReply({
+    content: null,
+    embeds: [successEmbed],
+    components: [backRow]
+  });
+}
+
+if (interaction.customId === 'cleanup_cancel') {
+  await interaction.update({
+    content: '❌ Nettoyage annulé.',
+    embeds: [],
+    components: []
+  });
+}
+
+if (interaction.customId === 'admin_back_maintenance') {
+  await handleAdminCategory(interaction, 'maintenance');
+}
     if (interaction.customId === 'recharge_cancel') {
       await interaction.update({
         content: '❌ Rechargement annulé.',
