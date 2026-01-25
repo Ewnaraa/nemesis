@@ -1268,11 +1268,52 @@ async function handleBuyFinal(interaction, days) {
       });
     }
     
-    // Générer la licence
-    const { createLicense } = require('./database');
-    const license = await createLicense(interaction.user.id, days);
+    // ✅ Vérifier si l'utilisateur a déjà une licence active
+    const existingLicense = await License.findOne({
+      discordUserId: interaction.user.id,
+      status: { $in: ['active', 'suspended'] }
+    });
     
-    // Débiter le solde
+    if (existingLicense) {
+      return await interaction.update({
+        content: `❌ Vous possédez déjà une licence active (\`${existingLicense.key}\`).`,
+        embeds: [],
+        components: []
+      });
+    }
+    
+    // ✅ Générer la licence manuellement
+    const key = generateLicenseKey();
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    
+    const license = new License({
+      key: key,
+      discordUserId: interaction.user.id,
+      username: interaction.user.username,
+      status: 'active',
+      createdAt: new Date(),
+      expiresAt: expiresAt,
+      usageCount: 0,
+      verificationCount: 0,
+      ips: [],
+      lastUsedAt: null,
+      logChannelId: null
+    });
+    
+    await license.save();
+    
+    // ✅ Créer le channel privé
+    try {
+      const logChannel = await createUserLogChannel(interaction.user.id, interaction.user.username);
+      if (logChannel) {
+        license.logChannelId = logChannel.id;
+        await license.save();
+      }
+    } catch (error) {
+      console.error('[BUY] Erreur création channel:', error);
+    }
+    
+    // ✅ Débiter le solde
     const newBalance = await deductBalance(
       interaction.user.id, 
       price, 
@@ -1316,6 +1357,21 @@ async function handleBuyFinal(interaction, days) {
       components: []
     });
   }
+}
+
+// ✅ Ajoute cette fonction si elle n'existe pas
+function generateLicenseKey() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let key = '';
+  
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    if (i < 3) key += '-';
+  }
+  
+  return key;
 }
 
 // ==================== HANDLER HISTORIQUE ====================
