@@ -302,343 +302,136 @@ app.get('/api/license/:key', async (req, res) => {
   }
 });
 
-// ========== DISCORD COMMANDS ==========
-
 const commands = [
-  // Commande /buy
   new SlashCommandBuilder()
-    .setName('buy')
-    .setDescription('Acheter une licence Auto Vote Bot'),
- 
-  new SlashCommandBuilder()
-  .setName('shop')
-  .setDescription('💎 Boutique Nemesis - Recharger solde et acheter licences'),
-  // Commande /license
-  new SlashCommandBuilder()
-    .setName('license')
-    .setDescription('Voir votre licence actuelle'),
+    .setName('menu')
+    .setDescription('📊 Dashboard principal - Gérez votre compte Nemesis Vote'),
   
   new SlashCommandBuilder()
-  .setName('mylogs')
-  .setDescription('📊 Accéder à vos logs personnels'),
-  new SlashCommandBuilder()
-  .setName('resetlogs')
-  .setDescription('[ADMIN] Reset le channel de logs d\'un utilisateur')
-  .addUserOption(option =>
-    option
-      .setName('user')
-      .setDescription('Utilisateur')
-      .setRequired(true)
-  ),
+    .setName('admin')
+    .setDescription('🛡️ [ADMIN] Dashboard administrateur'),
   
-  new SlashCommandBuilder()
-  .setName('help')
-  .setDescription('📚 Affiche le menu d\'aide interactif')
-  .addStringOption(option =>
-    option
-      .setName('categorie')
-      .setDescription('Catégorie spécifique')
-      .setRequired(false)
-      .addChoices(
-        { name: '🔑 Gestion Licences', value: 'licenses' },
-        { name: '📊 Stats & Suivi', value: 'stats' },
-        { name: '👑 Admin', value: 'admin' },
-        { name: '❓ Support', value: 'support' }
-      )
-  ),
-  
-  // ========== COMMANDES ADMIN ==========
-  new SlashCommandBuilder()
-  .setName('changelog')
-  .setDescription('📋 Voir les dernières mises à jour'),
-  
-  new SlashCommandBuilder()
-  .setName('clean-invalid')
-  .setDescription('[ADMIN] Supprimer les licences corrompues (sans discordUserId ou expiresAt)'),
-  // Commande /generate
+  // ========== COMMANDES ADMIN AVEC PARAMÈTRES ==========
   new SlashCommandBuilder()
     .setName('generate')
-    .setDescription('[ADMIN] Générer une licence manuelle')
+    .setDescription('🔑 [ADMIN] Générer une licence')
     .addUserOption(option =>
       option
         .setName('user')
-        .setDescription('Utilisateur qui recevra la licence')
+        .setDescription('Utilisateur Discord')
         .setRequired(true)
     )
     .addIntegerOption(option =>
       option
         .setName('duration')
-        .setDescription('Durée en jours (défaut: 30 jours)')
-        .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(365)
-    ),
-  
-  // Commande /revoke
-  new SlashCommandBuilder()
-    .setName('revoke')
-    .setDescription('[ADMIN] Révoquer une licence')
-    .addStringOption(option =>
-      option
-        .setName('key')
-        .setDescription('Clé de licence')
-        .setRequired(false)
-    )
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(false)
-    )
-    .addStringOption(option =>
-      option
-        .setName('reason')
-        .setDescription('Raison de la révocation')
-        .setRequired(false)
-    ),
-  
-  // Commande /check
-  new SlashCommandBuilder()
-    .setName('check')
-    .setDescription('[ADMIN] Vérifier une licence')
-    .addStringOption(option =>
-      option
-        .setName('key')
-        .setDescription('Clé de licence')
-        .setRequired(false)
-    )
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(false)
-    ),
-  
-  // Commande /stats
-  new SlashCommandBuilder()
-    .setName('stats')
-    .setDescription('[ADMIN] Statistiques des licences'),
-  
-  // Commande /logs
-  new SlashCommandBuilder()
-    .setName('logs')
-    .setDescription('[ADMIN] Logs d\'une licence')
-    .addStringOption(option =>
-      option
-        .setName('key')
-        .setDescription('Clé de licence')
-        .setRequired(false)
-    )
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(false)
-    ),
-  
-  // Commande /link
-  new SlashCommandBuilder()
-    .setName('link')
-    .setDescription('[ADMIN] Lier une licence à un Discord User ID')
-    .addStringOption(option =>
-      option
-        .setName('key')
-        .setDescription('Clé de licence')
-        .setRequired(true)
-    )
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(true)
-    ),
-  
-  // Commande /unlink
-  new SlashCommandBuilder()
-    .setName('unlink')
-    .setDescription('[ADMIN] Délier une licence d\'un Discord User ID')
-    .addStringOption(option =>
-      option
-        .setName('key')
-        .setDescription('Clé de licence')
-        .setRequired(true)
-    ),
-  
-  // Commande /extend
-  new SlashCommandBuilder()
-    .setName('extend')
-    .setDescription('[ADMIN] Prolonger une licence')
-    .addIntegerOption(option =>
-      option
-        .setName('days')
-        .setDescription('Nombre de jours à ajouter')
-        .setRequired(true)
-        .setMinValue(1)
-        .setMaxValue(365)
-    )
-    .addStringOption(option =>
-      option
-        .setName('key')
-        .setDescription('Clé de licence')
-        .setRequired(false)
-    )
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(false)
-    ),
-  
-  // Commande /userinfo
-  new SlashCommandBuilder()
-    .setName('userinfo')
-    .setDescription('[ADMIN] Info rapide sur un utilisateur')
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(true)
-    ),
-  
-  // Commande /userlogs
-  new SlashCommandBuilder()
-    .setName('userlogs')
-    .setDescription('[ADMIN] Logs rapides d\'un utilisateur')
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Utilisateur Discord')
-        .setRequired(true)
-    ),
-  
-  // Commande /licenses
-  new SlashCommandBuilder()
-    .setName('licenses')
-    .setDescription('[ADMIN] Liste toutes les licences')
-    .addStringOption(option =>
-      option
-        .setName('filter')
-        .setDescription('Filtrer par statut')
+        .setDescription('Durée en jours')
         .setRequired(false)
         .addChoices(
-          { name: '✅ Actives uniquement', value: 'active' },
-          { name: '⏰ Expirent bientôt (7j)', value: 'expiring' },
-          { name: '🚫 Révoquées', value: 'revoked' },
-          { name: '⏱️ Expirées', value: 'expired' },
-          { name: '📊 Toutes', value: 'all' }
+          { name: '30 jours', value: 30 },
+          { name: '90 jours', value: 90 },
+          { name: '180 jours', value: 180 },
+          { name: '365 jours', value: 365 }
         )
+    ),
+  
+  new SlashCommandBuilder()
+    .setName('revoke')
+    .setDescription('❌ [ADMIN] Révoquer une licence')
+    .addStringOption(option =>
+      option
+        .setName('key')
+        .setDescription('Clé de licence')
+        .setRequired(true)
+    ),
+  
+  new SlashCommandBuilder()
+    .setName('userinfo')
+    .setDescription('👤 [ADMIN] Informations utilisateur')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(true)
+    ),
+  
+  new SlashCommandBuilder()
+    .setName('userlogs')
+    .setDescription('📜 [ADMIN] Logs utilisateur')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(true)
     )
     .addIntegerOption(option =>
       option
         .setName('limit')
-        .setDescription('Nombre max de résultats (défaut: 10)')
+        .setDescription('Nombre de logs')
         .setRequired(false)
         .setMinValue(1)
         .setMaxValue(50)
     ),
   
-  // Commande /cleanup
   new SlashCommandBuilder()
-    .setName('cleanup')
-    .setDescription('[ADMIN] Nettoyer les anciennes licences')
-    .addIntegerOption(option =>
-      option
-        .setName('days')
-        .setDescription('Supprimer les licences expirées/révoquées depuis X jours')
-        .setRequired(true)
-        .setMinValue(30)
-        .setMaxValue(365)
-    )
-    .addBooleanOption(option =>
-      option
-        .setName('confirm')
-        .setDescription('Confirmer la suppression (True = oui)')
-        .setRequired(true)
-    ),
-  // Commande /referral
-  new SlashCommandBuilder()
-    .setName('referral')
-    .setDescription('Voir vos statistiques de parrainage'),
-  
-new SlashCommandBuilder()
-  .setName('fix-channels')
-  .setDescription('[ADMIN] Créer les channels manquants pour toutes les licences actives'),
-
-  // Commande /refer (ADMIN)
-  new SlashCommandBuilder()
-    .setName('refer')
-    .setDescription('[ADMIN] Enregistrer un parrainage manuellement')
+    .setName('reset-ips')
+    .setDescription('🔄 [ADMIN] Reset IPs utilisateur')
     .addUserOption(option =>
       option
-        .setName('referrer')
-        .setDescription('Utilisateur parrain')
-        .setRequired(true)
-    )
-    .addUserOption(option =>
-      option
-        .setName('referred')
-        .setDescription('Utilisateur filleul')
+        .setName('user')
+        .setDescription('Utilisateur Discord')
         .setRequired(true)
     ),
-  // Dans le tableau commands
-  new SlashCommandBuilder()
-  .setName('addbalance')
-  .setDescription('💰 [ADMIN] Ajouter du solde à un utilisateur')
-  .addUserOption(option =>
-    option
-      .setName('user')
-      .setDescription('Utilisateur')
-      .setRequired(true)
-  )
-  .addNumberOption(option =>
-    option
-      .setName('amount')
-      .setDescription('Montant en euros')
-      .setRequired(true)
-      .setMinValue(0.01)
-      .setMaxValue(1000)
-  )
-  .addStringOption(option =>
-    option
-      .setName('reason')
-      .setDescription('Raison (optionnel)')
-      .setRequired(false)
-  ),
-new SlashCommandBuilder()
-  .setName('unsuspend')
-  .setDescription('[ADMIN] Lever la suspension d\'une licence')
-  .addStringOption(option =>
-    option
-      .setName('key')
-      .setDescription('Clé de licence')
-      .setRequired(false)
-  )
-  .addUserOption(option =>
-    option
-      .setName('user')
-      .setDescription('Utilisateur Discord')
-      .setRequired(false)
-  ),
-
-// ✅ AJOUTER CETTE COMMANDE ICI
-new SlashCommandBuilder()
-  .setName('reset-ips')
-  .setDescription('[ADMIN] Réinitialiser les IPs d\'une licence')
-  .addStringOption(option =>
-    option
-      .setName('key')
-      .setDescription('Clé de licence')
-      .setRequired(false)
-  )
-  .addUserOption(option =>
-    option
-      .setName('user')
-      .setDescription('Utilisateur Discord')
-      .setRequired(false)
-  ),
   
+  new SlashCommandBuilder()
+    .setName('unsuspend')
+    .setDescription('✅ [ADMIN] Débloquer un utilisateur')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur Discord')
+        .setRequired(true)
+    ),
+  
+  new SlashCommandBuilder()
+    .setName('licenses')
+    .setDescription('📋 [ADMIN] Liste des licences')
+    .addStringOption(option =>
+      option
+        .setName('filter')
+        .setDescription('Filtre')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Toutes', value: 'all' },
+          { name: 'Actives', value: 'active' },
+          { name: 'Expirées', value: 'expired' },
+          { name: 'Suspendues', value: 'suspended' }
+        )
+    ),
+  
+  new SlashCommandBuilder()
+    .setName('addbalance')
+    .setDescription('💰 [ADMIN] Ajouter du solde')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('Utilisateur')
+        .setRequired(true)
+    )
+    .addNumberOption(option =>
+      option
+        .setName('amount')
+        .setDescription('Montant en euros')
+        .setRequired(true)
+        .setMinValue(0.01)
+        .setMaxValue(1000)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Raison (optionnel)')
+        .setRequired(false)
+    )
 ];
-
 // ========== ENREGISTRER LES COMMANDES ==========
 async function registerCommands() {
   try {
@@ -662,240 +455,859 @@ async function registerCommands() {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   
-  const { commandName, user } = interaction;
-  // ✅ HANDLER BOUTONS
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isButton()) return;
-
-  const [action, userId] = interaction.customId.split('_');
-
-  try {
-    switch (action) {
-      case 'renew':
-        await interaction.reply({
-          content: '💳 Pour renouveler, contactez un admin ou utilisez `/generate`.',
-          ephemeral: true
-        });
-        break;
-
-      case 'stats':
-        const license = await License.findOne({ discordUserId: userId });
-        if (!license) {
-          return interaction.reply({
-            content: '❌ Licence introuvable.',
-            ephemeral: true
-          });
-        }
-
-        const statsEmbed = new EmbedBuilder()
-          .setColor('#6366f1')
-          .setTitle('📊 Statistiques Détaillées')
-          .addFields(
-            { name: '📈 Votes Total', value: `${license.usageCount}`, inline: true },
-            { name: '✅ Taux Réussite', value: '95%', inline: true }, // À calculer
-            { name: '🎁 Tokens Gagnés', value: `${license.usageCount * 2}`, inline: true },
-            { name: '🔍 Vérifications', value: `${license.verificationCount}`, inline: true },
-            { name: '📱 IPs Uniques', value: `${license.ipAddresses.length}`, inline: true },
-            { name: '⏰ Dernier Vote', value: license.lastUsedAt ? `<t:${Math.floor(license.lastUsedAt.getTime() / 1000)}:R>` : 'Jamais', inline: true }
-          )
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [statsEmbed], ephemeral: true });
-        break;
-
-      case 'logs':
-        const logs = await Log.find({ licenseKey: userId }).sort({ timestamp: -1 }).limit(10);
-        
-        if (logs.length === 0) {
-          return interaction.reply({
-            content: '📋 Aucun log disponible.',
-            ephemeral: true
-          });
-        }
-
-        const logsEmbed = new EmbedBuilder()
-          .setColor('#8b5cf6')
-          .setTitle('📋 Derniers Logs')
-          .setDescription(
-            logs.map(log => {
-              const emoji = log.action === 'verify' ? '✅' : log.action === 'usage' ? '🎮' : '📊';
-              return `${emoji} \`${log.action}\` - <t:${Math.floor(log.timestamp.getTime() / 1000)}:R>`;
-            }).join('\n')
-          )
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [logsEmbed], ephemeral: true });
-        break;
-    }
-  } catch (error) {
-    console.error('[BUTTON] Erreur:', error);
-    await interaction.reply({
-      content: '❌ Erreur lors du traitement.',
-      ephemeral: true
-    });
-  }
-});
-  // Vérifier si admin pour commandes admin
-  const isAdmin = ADMIN_IDS.includes(user.id);
-  const adminCommands = ['generate', 'revoke', 'check', 'stats', 'logs', 'link', 'unlink', 'extend', 'userinfo', 'userlogs', 'licenses', 'cleanup', 'reset-ips'];
-  
-  if (adminCommands.includes(commandName) && !isAdmin) {
-    return interaction.reply({
-      content: '❌ Cette commande est réservée aux administrateurs.',
-      ephemeral: true
-    });
-  }
-  
-  try {
-    switch (commandName) {
-      case 'buy':
-        await handleBuyCommand(interaction);
-        break;
-        
-      case 'changelog':
-        // ✅ VÉRIFICATION ADMIN
-  if (!ADMIN_IDS.includes(interaction.user.id)) {
-    return interaction.reply({
-      content: '❌ Cette commande est réservée aux administrateurs.',
-      flags: MessageFlags.Ephemeral
-    });
-  }
-  const versions = ['2.4.0', '2.5.0', '2.6.0','2.6.1'];
-  const embeds = [];
-  
-  for (const version of versions) {
-    const info = changelogData[version];
-    if (!info) continue;
-    
-    const embed = new EmbedBuilder()
-      .setColor(version === '2.6.1' ? '#10b981' : '#6366f1')
-      .setTitle(`${info.title} - v${version}`)
-      .setDescription(info.description)
-      .setFooter({ text: `Nemesis Vote • ${info.date}` });
-    
-    if (info.features && info.features.length > 0) {
-      embed.addFields({
-        name: '✨ Nouveautés',
-        value: info.features.join('\n'),
-        inline: false
-      });
-    }
-    
-    if (info.improvements && info.improvements.length > 0) {
-      embed.addFields({
-        name: '⚡ Améliorations',
-        value: info.improvements.join('\n'),
-        inline: false
-      });
-    }
-    
-    embeds.push(embed);
-  }
-  
-  await interaction.reply({ 
-    content: `📋 **Historique des mises à jour** (demandé par ${interaction.user.username})`,
-    embeds: embeds
-  });
-  break;
-        
-      case 'license':
-        await handleLicenseCommand(interaction);
-        break;
-        
-      case 'help':
-  await handleHelpCommand(interaction);
-  break;
-        
-      case 'generate':
-        await handleGenerateCommand(interaction);
-        break;
-        
-      case 'revoke':
-        await handleRevokeCommand(interaction);
-        break;
-        
-      case 'check':
-        await handleCheckCommand(interaction);
-        break;
-        
-        case 'fix-channels':
-  await handleFixChannelsCommand(interaction);
-  break;
-        case 'mylogs':
-  await handleMyLogsCommand(interaction);
-  break;
-        case 'clean-invalid':
-  await handleCleanInvalidCommand(interaction);
-  break;
-      case 'stats':
-        await handleStatsCommand(interaction);
-        break;
-        
-      case 'logs':
-        await handleLogsCommand(interaction);
-        break;
-        
-      case 'link':
-        await handleLinkCommand(interaction);
-        break;
-        
-      case 'unlink':
-        await handleUnlinkCommand(interaction);
-        break;
-        
-      case 'extend':
-        await handleExtendCommand(interaction);
-        break;
-        case 'shop':
-  await handleShopCommand(interaction);
-  break;
-        case 'addbalance':
-  await handleAddBalanceCommand(interaction);
-  break;
-      case 'userinfo':
-        await handleUserInfoCommand(interaction);
-        break;
-        
-      case 'userlogs':
-        await handleUserLogsCommand(interaction);
-        break;
-        
-      case 'licenses':
-        await handleLicensesCommand(interaction);
-        break;
-        case 'resetlogs':
-  await handleResetLogsCommand(interaction);
-  break;
-        
-      case 'cleanup':
-        await handleCleanupCommand(interaction);
-        break;
-        case 'referral':
-      await handleReferralCommand(interaction);
+  switch (interaction.commandName) {
+    case 'menu':
+      await handleMenuCommand(interaction);
       break;
       
-    case 'refer':
-      await handleReferCommand(interaction);
+    case 'admin':
+      await handleAdminCommand(interaction);
       break;
-        case 'unsuspend':
-  await handleUnsuspendCommand(interaction);
-  break;
-// ✅ AJOUTER CE CASE ICI
-case 'reset-ips':
-  await handleResetIpsCommand(interaction);
-  break;
-    }
-  } catch (error) {
-    console.error(`❌ [COMMAND] Erreur ${commandName}:`, error);
-    await interaction.reply({
-      content: '❌ Une erreur est survenue.',
-      ephemeral: true
-    }).catch(() => {});
+      
+    // ========== COMMANDES ADMIN DIRECTES ==========
+    case 'generate':
+      await handleGenerateCommand(interaction);
+      break;
+      
+    case 'revoke':
+      await handleRevokeCommand(interaction);
+      break;
+      
+    case 'userinfo':
+      await handleUserInfoCommand(interaction);
+      break;
+      
+    case 'userlogs':
+      await handleUserLogsCommand(interaction);
+      break;
+      
+    case 'reset-ips':
+      await handleResetIpsCommand(interaction);
+      break;
+      
+    case 'unsuspend':
+      await handleUnsuspendCommand(interaction);
+      break;
+      
+    case 'licenses':
+      await handleLicensesCommand(interaction);
+      break;
+      
+    case 'addbalance':
+      await handleAddBalanceCommand(interaction);
+      break;
+      
+    default:
+      await interaction.reply({
+        content: '❌ Commande inconnue.',
+        flags: MessageFlags.Ephemeral
+      });
   }
 });
 
 // ========== HANDLERS DES COMMANDES ==========
-
+// ==================== DASHBOARD USER /menu ====================
+async function handleMenuCommand(interaction) {
+  try {
+    // Charger les données utilisateur
+    const balance = await getBalance(interaction.user.id);
+    
+    const license = await License.findOne({
+      discordUserId: interaction.user.id,
+      status: 'active'
+    });
+    
+    // Compter les filleuls (système de parrainage)
+    const referrals = await License.countDocuments({
+      referredBy: interaction.user.id,
+      status: 'active'
+    });
+    
+    // Stats utilisateur
+    let licenseInfo = '❌ Aucune licence active';
+    let votesInfo = '0 votes';
+    
+    if (license) {
+      const daysRemaining = Math.ceil((license.expiresAt - Date.now()) / (1000 * 60 * 60 * 24));
+      licenseInfo = `✅ Actif (expire dans ${daysRemaining} jours)`;
+      votesInfo = `${license.usageCount || 0} votes`;
+    }
+    
+    const embed = new EmbedBuilder()
+      .setColor('#6366f1')
+      .setAuthor({
+        name: interaction.user.username,
+        iconURL: interaction.user.displayAvatarURL()
+      })
+      .setTitle('📊 Dashboard Nemesis Vote')
+      .setDescription('Bienvenue sur votre tableau de bord !')
+      .addFields(
+        { name: '💰 Balance', value: `${balance.toFixed(2)}€`, inline: true },
+        { name: '📜 Licence', value: licenseInfo, inline: true },
+        { name: '🎮 Votes', value: votesInfo, inline: true },
+        { name: '🎁 Filleuls', value: `${referrals} actifs`, inline: true }
+      )
+      .setFooter({ text: 'Nemesis Vote • Sélectionnez une action ci-dessous' })
+      .setTimestamp();
+    
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('menu_main')
+      .setPlaceholder('Choisissez une action...')
+      .addOptions([
+        {
+          label: 'Recharger mon solde',
+          description: 'Ajouter des fonds via PayPal',
+          value: 'recharge',
+          emoji: '💳'
+        },
+        {
+          label: 'Acheter une licence',
+          description: 'Acheter ou prolonger votre licence',
+          value: 'buy',
+          emoji: '🛒'
+        },
+        {
+          label: 'Ma licence',
+          description: 'Vérifier votre licence actuelle',
+          value: 'check',
+          emoji: '📋'
+        },
+        {
+          label: 'Mon channel privé',
+          description: 'Accéder à vos logs Discord',
+          value: 'logs',
+          emoji: '📺'
+        },
+        {
+          label: 'Mes statistiques',
+          description: 'Voir vos stats détaillées',
+          value: 'stats',
+          emoji: '📊'
+        },
+        {
+          label: 'Historique',
+          description: 'Historique de vos transactions',
+          value: 'history',
+          emoji: '📜'
+        },
+        {
+          label: 'Code parrainage',
+          description: 'Voir votre code de parrainage',
+          value: 'referral',
+          emoji: '🎁'
+        }
+      ]);
+    
+    const row = new ActionRowBuilder().addComponents(menu);
+    
+    await interaction.reply({ 
+      embeds: [embed], 
+      components: [row],
+      flags: MessageFlags.Ephemeral 
+    });
+    
+  } catch (error) {
+    console.error('[MENU] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors de l\'ouverture du dashboard.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+// ==================== HANDLER MENU USER ACTIONS ====================
+async function handleMenuAction(interaction, action) {
+  try {
+    switch (action) {
+      case 'recharge':
+        await handleRechargeMenu(interaction);
+        break;
+        
+      case 'buy':
+        await handleBuyMenu(interaction);
+        break;
+        
+      case 'check':
+        // Vérifier la licence
+        const license = await License.findOne({
+          discordUserId: interaction.user.id,
+          status: 'active'
+        });
+        
+        if (!license) {
+          return await interaction.update({
+            content: '❌ Vous n\'avez pas de licence active.',
+            embeds: [],
+            components: []
+          });
+        }
+        
+        const daysRemaining = Math.ceil((license.expiresAt - Date.now()) / (1000 * 60 * 60 * 24));
+        
+        const checkEmbed = new EmbedBuilder()
+          .setColor('#10b981')
+          .setTitle('📋 Votre Licence')
+          .addFields(
+            { name: '🔑 Clé', value: `\`${license.key}\``, inline: false },
+            { name: '👤 Utilisateur', value: license.username, inline: true },
+            { name: '📅 Expire dans', value: `${daysRemaining} jours`, inline: true },
+            { name: '🎮 Votes effectués', value: `${license.usageCount || 0}`, inline: true },
+            { name: '📆 Créée le', value: `<t:${Math.floor(license.createdAt.getTime() / 1000)}:D>`, inline: true },
+            { name: '📆 Expire le', value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:D>`, inline: true }
+          )
+          .setFooter({ text: 'Nemesis Vote' })
+          .setTimestamp();
+        
+        await interaction.update({
+          embeds: [checkEmbed],
+          components: []
+        });
+        break;
+        
+      case 'logs':
+        // Accéder au channel privé
+        const logLicense = await License.findOne({
+          discordUserId: interaction.user.id,
+          status: 'active'
+        });
+        
+        if (!logLicense) {
+          return await interaction.update({
+            content: '❌ Vous devez avoir une licence active.',
+            embeds: [],
+            components: []
+          });
+        }
+        
+        if (!logLicense.logChannelId) {
+          const channel = await createUserLogChannel(interaction.user.id, interaction.user.username);
+          if (channel) {
+            logLicense.logChannelId = channel.id;
+            await logLicense.save();
+            
+            await interaction.update({
+              content: `✅ Votre channel privé a été créé !\n\n📺 Accédez-y ici : <#${channel.id}>`,
+              embeds: [],
+              components: []
+            });
+          }
+        } else {
+          await interaction.update({
+            content: `📺 Votre channel privé : <#${logLicense.logChannelId}>`,
+            embeds: [],
+            components: []
+          });
+        }
+        break;
+        
+      case 'stats':
+        // Statistiques détaillées
+        const statsLicense = await License.findOne({
+          discordUserId: interaction.user.id,
+          status: 'active'
+        });
+        
+        if (!statsLicense) {
+          return await interaction.update({
+            content: '❌ Vous devez avoir une licence active.',
+            embeds: [],
+            components: []
+          });
+        }
+        
+        const statsEmbed = new EmbedBuilder()
+          .setColor('#8b5cf6')
+          .setTitle('📊 Vos Statistiques')
+          .addFields(
+            { name: '🎮 Total votes', value: `${statsLicense.usageCount || 0}`, inline: true },
+            { name: '✅ Vérifications', value: `${statsLicense.verificationCount || 0}`, inline: true },
+            { name: '📅 Membre depuis', value: `<t:${Math.floor(statsLicense.createdAt.getTime() / 1000)}:R>`, inline: true },
+            { name: '🕒 Dernier vote', value: statsLicense.lastUsedAt ? `<t:${Math.floor(statsLicense.lastUsedAt.getTime() / 1000)}:R>` : 'Jamais', inline: true }
+          )
+          .setFooter({ text: 'Nemesis Vote' })
+          .setTimestamp();
+        
+        await interaction.update({
+          embeds: [statsEmbed],
+          components: []
+        });
+        break;
+        
+      case 'history':
+        await handleHistoryMenu(interaction);
+        break;
+        
+      case 'referral':
+        // Code de parrainage
+        const referralCount = await License.countDocuments({
+          referredBy: interaction.user.id,
+          status: 'active'
+        });
+        
+        const discount = Math.min(referralCount * 10, 50); // Max 50%
+        
+        const referralEmbed = new EmbedBuilder()
+          .setColor('#10b981')
+          .setTitle('🎁 Votre Code de Parrainage')
+          .setDescription(`Partagez votre Discord User ID pour parrainer vos amis !`)
+          .addFields(
+            { name: '🔢 Votre code', value: `\`${interaction.user.id}\``, inline: false },
+            { name: '👥 Filleuls actifs', value: `${referralCount}`, inline: true },
+            { name: '💰 Réduction actuelle', value: `${discount}%`, inline: true }
+          )
+          .setFooter({ text: 'Nemesis Vote • Gagnez 10% par filleul (max 50%)' })
+          .setTimestamp();
+        
+        await interaction.update({
+          embeds: [referralEmbed],
+          components: []
+        });
+        break;
+    }
+    
+  } catch (error) {
+    console.error('[MENU ACTION] Erreur:', error);
+    await interaction.update({
+      content: '❌ Erreur lors de l\'exécution de l\'action.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+// ==================== DASHBOARD ADMIN /admin ====================
+async function handleAdminCommand(interaction) {
+  try {
+    // Vérification admin
+    if (!ADMIN_IDS.includes(interaction.user.id)) {
+      return interaction.reply({
+        content: '❌ Cette commande est réservée aux administrateurs.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    // Stats globales
+    const totalUsers = await License.countDocuments({ status: 'active' });
+    const totalLicenses = await License.countDocuments({});
+    const suspendedUsers = await License.countDocuments({ status: 'suspended' });
+    
+    // Revenus du mois
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const monthlyRevenue = await Balance.aggregate([
+      {
+        $unwind: '$transactions'
+      },
+      {
+        $match: {
+          'transactions.type': 'debit',
+          'transactions.timestamp': { $gte: startOfMonth }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$transactions.amount' }
+        }
+      }
+    ]);
+    
+    const revenue = monthlyRevenue.length > 0 ? monthlyRevenue[0].total : 0;
+    
+    // Votes aujourd'hui
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const todayVotes = await Log.countDocuments({
+      timestamp: { $gte: startOfDay },
+      event: 'vote_success'
+    });
+    
+    const embed = new EmbedBuilder()
+      .setColor('#ef4444')
+      .setAuthor({
+        name: 'Administration',
+        iconURL: interaction.guild.iconURL()
+      })
+      .setTitle('🛡️ Dashboard Admin - Nemesis Vote')
+      .setDescription('Panneau de contrôle administrateur')
+      .addFields(
+        { name: '👥 Utilisateurs actifs', value: `${totalUsers}`, inline: true },
+        { name: '🔑 Licences totales', value: `${totalLicenses}`, inline: true },
+        { name: '⚠️ Suspendus', value: `${suspendedUsers}`, inline: true },
+        { name: '💰 Revenus du mois', value: `${revenue.toFixed(2)}€`, inline: true },
+        { name: '🎮 Votes aujourd\'hui', value: `${todayVotes}`, inline: true }
+      )
+      .setFooter({ text: 'Nemesis Vote • Admin Panel' })
+      .setTimestamp();
+    
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('admin_main')
+      .setPlaceholder('Choisissez une catégorie...')
+      .addOptions([
+        {
+          label: 'Gestion Utilisateurs',
+          description: 'Gérer les utilisateurs et leurs licences',
+          value: 'users',
+          emoji: '👤'
+        },
+        {
+          label: 'Gestion Licences',
+          description: 'Créer, révoquer, gérer les licences',
+          value: 'licenses',
+          emoji: '🔑'
+        },
+        {
+          label: 'Statistiques',
+          description: 'Stats globales et analytics',
+          value: 'stats',
+          emoji: '📊'
+        },
+        {
+          label: 'Maintenance',
+          description: 'Outils de maintenance système',
+          value: 'maintenance',
+          emoji: '🔧'
+        },
+        {
+          label: 'Soldes & Paiements',
+          description: 'Gérer les soldes utilisateurs',
+          value: 'balance',
+          emoji: '💰'
+        }
+      ]);
+    
+    const row = new ActionRowBuilder().addComponents(menu);
+    
+    await interaction.reply({ 
+      embeds: [embed], 
+      components: [row],
+      flags: MessageFlags.Ephemeral 
+    });
+    
+  } catch (error) {
+    console.error('[ADMIN] Erreur:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors de l\'ouverture du dashboard admin.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+// ==================== HANDLER ADMIN CATEGORIES ====================
+async function handleAdminCategory(interaction, category) {
+  try {
+    let menu;
+    let embed;
+    
+    switch (category) {
+      case 'users':
+        embed = new EmbedBuilder()
+          .setColor('#3b82f6')
+          .setTitle('👤 Gestion Utilisateurs')
+          .setDescription('Sélectionnez une action')
+          .setFooter({ text: 'Nemesis Vote • Admin' });
+        
+        menu = new StringSelectMenuBuilder()
+          .setCustomId('admin_users_action')
+          .setPlaceholder('Action utilisateur...')
+          .addOptions([
+            {
+              label: 'Voir un utilisateur',
+              description: 'Afficher les infos d\'un utilisateur',
+              value: 'userinfo',
+              emoji: 'ℹ️'
+            },
+            {
+              label: 'Logs utilisateur',
+              description: 'Voir l\'historique d\'un utilisateur',
+              value: 'userlogs',
+              emoji: '📜'
+            },
+            {
+              label: 'Reset IPs',
+              description: 'Réinitialiser les IPs d\'un utilisateur',
+              value: 'reset_ips',
+              emoji: '🔄'
+            },
+            {
+              label: 'Unsuspend',
+              description: 'Débloquer un utilisateur suspendu',
+              value: 'unsuspend',
+              emoji: '✅'
+            },
+            {
+              label: '← Retour',
+              description: 'Retour au menu principal',
+              value: 'back',
+              emoji: '◀️'
+            }
+          ]);
+        break;
+        
+      case 'licenses':
+        embed = new EmbedBuilder()
+          .setColor('#10b981')
+          .setTitle('🔑 Gestion Licences')
+          .setDescription('Sélectionnez une action')
+          .setFooter({ text: 'Nemesis Vote • Admin' });
+        
+        menu = new StringSelectMenuBuilder()
+          .setCustomId('admin_licenses_action')
+          .setPlaceholder('Action licence...')
+          .addOptions([
+            {
+              label: 'Générer une licence',
+              description: 'Créer une nouvelle licence',
+              value: 'generate',
+              emoji: '➕'
+            },
+            {
+              label: 'Révoquer une licence',
+              description: 'Révoquer une licence existante',
+              value: 'revoke',
+              emoji: '❌'
+            },
+            {
+              label: 'Liste des licences',
+              description: 'Voir toutes les licences',
+              value: 'list',
+              emoji: '📋'
+            },
+            {
+              label: 'Cleanup',
+              description: 'Nettoyer les licences expirées',
+              value: 'cleanup',
+              emoji: '🧹'
+            },
+            {
+              label: '← Retour',
+              description: 'Retour au menu principal',
+              value: 'back',
+              emoji: '◀️'
+            }
+          ]);
+        break;
+        
+      case 'stats':
+        // Afficher stats directement
+        const stats = await getStats();
+        
+        const statsEmbed = new EmbedBuilder()
+          .setColor('#8b5cf6')
+          .setTitle('📊 Statistiques Globales')
+          .addFields(
+            { name: '👥 Utilisateurs totaux', value: `${stats.totalUsers}`, inline: true },
+            { name: '✅ Actifs', value: `${stats.activeUsers}`, inline: true },
+            { name: '❌ Expirés', value: `${stats.expiredUsers}`, inline: true },
+            { name: '⚠️ Suspendus', value: `${stats.suspendedUsers}`, inline: true },
+            { name: '🎮 Votes total', value: `${stats.totalVotes}`, inline: true },
+            { name: '🔢 Vérifications', value: `${stats.totalVerifications}`, inline: true }
+          )
+          .setFooter({ text: 'Nemesis Vote • Statistiques' })
+          .setTimestamp();
+        
+        return await interaction.update({
+          embeds: [statsEmbed],
+          components: []
+        });
+        
+      case 'maintenance':
+        embed = new EmbedBuilder()
+          .setColor('#f59e0b')
+          .setTitle('🔧 Maintenance')
+          .setDescription('Outils de maintenance système')
+          .setFooter({ text: 'Nemesis Vote • Admin' });
+        
+        menu = new StringSelectMenuBuilder()
+          .setCustomId('admin_maintenance_action')
+          .setPlaceholder('Action maintenance...')
+          .addOptions([
+            {
+              label: 'Fix channels',
+              description: 'Créer les channels manquants',
+              value: 'fix_channels',
+              emoji: '📺'
+            },
+            {
+              label: 'Clean invalid',
+              description: 'Supprimer licences corrompues',
+              value: 'clean_invalid',
+              emoji: '🗑️'
+            },
+            {
+              label: '← Retour',
+              description: 'Retour au menu principal',
+              value: 'back',
+              emoji: '◀️'
+            }
+          ]);
+        break;
+        
+      case 'balance':
+        embed = new EmbedBuilder()
+          .setColor('#10b981')
+          .setTitle('💰 Gestion Soldes')
+          .setDescription('Gérer les soldes utilisateurs')
+          .setFooter({ text: 'Nemesis Vote • Admin' });
+        
+        menu = new StringSelectMenuBuilder()
+          .setCustomId('admin_balance_action')
+          .setPlaceholder('Action solde...')
+          .addOptions([
+            {
+              label: 'Ajouter du solde',
+              description: 'Créditer un utilisateur',
+              value: 'addbalance',
+              emoji: '➕'
+            },
+            {
+              label: 'Voir les transactions',
+              description: 'Historique des paiements',
+              value: 'transactions',
+              emoji: '📜'
+            },
+            {
+              label: '← Retour',
+              description: 'Retour au menu principal',
+              value: 'back',
+              emoji: '◀️'
+            }
+          ]);
+        break;
+    }
+    
+    const row = new ActionRowBuilder().addComponents(menu);
+    
+    await interaction.update({ 
+      embeds: [embed], 
+      components: [row]
+    });
+    
+  } catch (error) {
+    console.error('[ADMIN CATEGORY] Erreur:', error);
+    await interaction.update({
+      content: '❌ Erreur lors du chargement de la catégorie.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+// ==================== HANDLER ADMIN ACTIONS ====================
+async function handleAdminAction(interaction, action) {
+  try {
+    
+    // Retour au menu principal
+    if (action === 'back') {
+      return await handleAdminCommand(interaction);
+    }
+    
+    switch (action) {
+      // ========== USERS ==========
+      case 'userinfo':
+        await interaction.update({
+          content: '👤 **Informations utilisateur**\n\nUtilisez la commande : `/userinfo user:@User`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'userlogs':
+        await interaction.update({
+          content: '📜 **Logs utilisateur**\n\nUtilisez la commande : `/userlogs user:@User`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'reset_ips':
+        await interaction.update({
+          content: '🔄 **Reset IPs**\n\nUtilisez la commande : `/reset-ips user:@User`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'unsuspend':
+        await interaction.update({
+          content: '✅ **Unsuspend utilisateur**\n\nUtilisez la commande : `/unsuspend user:@User`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      // ========== LICENSES ==========
+      case 'generate':
+        await interaction.update({
+          content: '➕ **Générer une licence**\n\nUtilisez la commande : `/generate user:@User duration:30`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'revoke':
+        await interaction.update({
+          content: '❌ **Révoquer une licence**\n\nUtilisez la commande : `/revoke key:XXXX-XXXX-XXXX-XXXX`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'list':
+        // Liste des licences
+        await interaction.update({
+          content: '📋 **Liste des licences**\n\nUtilisez la commande : `/licenses filter:active`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'cleanup':
+        // Cleanup licences expirées
+        await interaction.deferUpdate();
+        
+        const expiredDate = new Date();
+        expiredDate.setDate(expiredDate.getDate() - 7);
+        
+        const result = await License.deleteMany({
+          status: 'expired',
+          expiresAt: { $lt: expiredDate }
+        });
+        
+        await interaction.editReply({
+          content: `🧹 **Cleanup effectué**\n\n✅ ${result.deletedCount} licence(s) expirée(s) supprimée(s) (>7 jours)`,
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      // ========== MAINTENANCE ==========
+      case 'fix_channels':
+        await interaction.deferUpdate();
+        
+        const licenses = await License.find({ 
+          status: 'active',
+          logChannelId: null
+        });
+        
+        let created = 0;
+        let errors = 0;
+        
+        for (const license of licenses) {
+          try {
+            const channel = await createUserLogChannel(license.discordUserId, license.username);
+            if (channel) {
+              license.logChannelId = channel.id;
+              await license.save();
+              created++;
+            } else {
+              errors++;
+            }
+          } catch (error) {
+            errors++;
+          }
+        }
+        
+        await interaction.editReply({
+          content: `📺 **Fix channels terminé**\n\n✅ Créés : ${created}\n❌ Erreurs : ${errors}\n📋 Total : ${licenses.length}`,
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'clean_invalid':
+        await interaction.deferUpdate();
+        
+        const cleanResult = await License.deleteMany({
+          $or: [
+            { discordUserId: { $exists: false } },
+            { discordUserId: null },
+            { discordUserId: '' },
+            { expiresAt: { $exists: false } },
+            { expiresAt: null }
+          ]
+        });
+        
+        await interaction.editReply({
+          content: `🗑️ **Nettoyage effectué**\n\n✅ ${cleanResult.deletedCount} licence(s) corrompue(s) supprimée(s)`,
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      // ========== BALANCE ==========
+      case 'addbalance':
+        await interaction.update({
+          content: '➕ **Ajouter du solde**\n\nUtilisez la commande : `/addbalance user:@User amount:10`\n\n_(Cette action nécessite une interaction directe)_',
+          embeds: [],
+          components: []
+        });
+        break;
+        
+      case 'transactions':
+        // Top 10 dernières transactions
+        const allBalances = await Balance.find({})
+          .sort({ 'transactions.timestamp': -1 })
+          .limit(10);
+        
+        const allTransactions = [];
+        
+        for (const balance of allBalances) {
+          for (const tx of balance.transactions.slice(-10)) {
+            allTransactions.push({
+              userId: balance.discordUserId,
+              ...tx
+            });
+          }
+        }
+        
+        allTransactions.sort((a, b) => b.timestamp - a.timestamp);
+        const recentTransactions = allTransactions.slice(0, 10);
+        
+        if (recentTransactions.length === 0) {
+          return await interaction.update({
+            content: '📜 Aucune transaction récente.',
+            embeds: [],
+            components: []
+          });
+        }
+        
+        const txText = recentTransactions.map(tx => {
+          const emoji = tx.type === 'credit' ? '✅' : '❌';
+          const sign = tx.type === 'credit' ? '+' : '-';
+          const date = `<t:${Math.floor(tx.timestamp.getTime() / 1000)}:R>`;
+          return `${emoji} <@${tx.userId}> ${sign}${tx.amount.toFixed(2)}€ - ${tx.reason} (${date})`;
+        }).join('\n');
+        
+        const txEmbed = new EmbedBuilder()
+          .setColor('#10b981')
+          .setTitle('📜 Transactions Récentes')
+          .setDescription(txText)
+          .setFooter({ text: 'Nemesis Vote • 10 dernières transactions' })
+          .setTimestamp();
+        
+        await interaction.update({
+          embeds: [txEmbed],
+          components: []
+        });
+        break;
+        
+      default:
+        await interaction.update({
+          content: '❌ Action non implémentée.',
+          embeds: [],
+          components: []
+        });
+    }
+    
+  } catch (error) {
+    console.error('[ADMIN ACTION] Erreur:', error);
+    await interaction.update({
+      content: '❌ Erreur lors de l\'exécution de l\'action.',
+      embeds: [],
+      components: []
+    });
+  }
+}
 // ==================== HANDLER SHOP COMMAND ====================
 async function handleAddBalanceCommand(interaction) {
   try {
@@ -2072,11 +2484,44 @@ async function handleHelpCommand(interaction) {
 
 
 // ✅ HANDLER SELECT MENU
-// ==================== HANDLER SELECT MENUS ====================
 client.on('interactionCreate', async (interaction) => {
+  // ==================== HANDLER SELECT MENUS ====================
   if (interaction.isStringSelectMenu()) {
     
-    // Menu principal shop
+    // ========== MENU USER /menu ==========
+    if (interaction.customId === 'menu_main') {
+      const action = interaction.values[0];
+      await handleMenuAction(interaction, action);
+    }
+    
+    // ========== MENU ADMIN /admin ==========
+    if (interaction.customId === 'admin_main') {
+      const category = interaction.values[0];
+      await handleAdminCategory(interaction, category);
+    }
+    
+    // ========== SOUS-MENUS ADMIN ==========
+    if (interaction.customId === 'admin_users_action') {
+      const action = interaction.values[0];
+      await handleAdminAction(interaction, action);
+    }
+    
+    if (interaction.customId === 'admin_licenses_action') {
+      const action = interaction.values[0];
+      await handleAdminAction(interaction, action);
+    }
+    
+    if (interaction.customId === 'admin_maintenance_action') {
+      const action = interaction.values[0];
+      await handleAdminAction(interaction, action);
+    }
+    
+    if (interaction.customId === 'admin_balance_action') {
+      const action = interaction.values[0];
+      await handleAdminAction(interaction, action);
+    }
+    
+    // ========== SHOP (garde l'existant) ==========
     if (interaction.customId === 'shop_menu') {
       const choice = interaction.values[0];
       
@@ -2093,67 +2538,113 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
     
-    // Menu montant recharge
-if (interaction.customId === 'recharge_amount_menu') {
-  const value = interaction.values[0];
-  
-  if (value === 'custom') {
-    // Demander montant personnalisé
-    await interaction.update({
-      content: '✏️ **Montant personnalisé**\n\nVeuillez envoyer le montant que vous souhaitez recharger (minimum 5€)\n\nExemple: `15` pour 15€',
-      embeds: [],
-      components: []
-    });
-    
-    // Créer collector pour attendre le message
-    const filter = m => m.author.id === interaction.user.id && !isNaN(m.content);
-    const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
-    
-    collector.on('collect', async (msg) => {
-      const amount = parseFloat(msg.content);
+    if (interaction.customId === 'recharge_amount_menu') {
+      const value = interaction.values[0];
       
-      if (amount < 5) {
-        await msg.reply('❌ Le montant minimum est de 5€.');
-        return;
-      }
-      
-      if (amount > 500) {
-        await msg.reply('❌ Le montant maximum est de 500€.');
-        return;
-      }
-      
-      await msg.delete().catch(() => {});
-      
-      // Créer une fake interaction pour handleRechargeConfirm
-      const fakeInteraction = {
-        ...interaction,
-        update: interaction.editReply.bind(interaction)
-      };
-      
-      await handleRechargeConfirm(fakeInteraction, amount);
-    });
-    
-    collector.on('end', collected => {
-      if (collected.size === 0) {
-        interaction.editReply({
-          content: '❌ Temps écoulé. Refaites `/shop` pour recommencer.',
+      if (value === 'custom') {
+        await interaction.update({
+          content: '✏️ **Montant personnalisé**\n\nVeuillez envoyer le montant que vous souhaitez recharger (minimum 5€)\n\nExemple: `15` pour 15€',
+          embeds: [],
           components: []
-        }).catch(() => {});
+        });
+        
+        const filter = m => m.author.id === interaction.user.id && !isNaN(m.content);
+        const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
+        
+        collector.on('collect', async (msg) => {
+          const amount = parseFloat(msg.content);
+          
+          if (amount < 5) {
+            await msg.reply('❌ Le montant minimum est de 5€.');
+            return;
+          }
+          
+          if (amount > 500) {
+            await msg.reply('❌ Le montant maximum est de 500€.');
+            return;
+          }
+          
+          await msg.delete().catch(() => {});
+          
+          const fakeInteraction = {
+            ...interaction,
+            update: interaction.editReply.bind(interaction)
+          };
+          
+          await handleRechargeConfirm(fakeInteraction, amount);
+        });
+        
+        collector.on('end', collected => {
+          if (collected.size === 0) {
+            interaction.editReply({
+              content: '❌ Temps écoulé. Refaites `/menu` pour recommencer.',
+              components: []
+            }).catch(() => {});
+          }
+        });
+        
+      } else {
+        const amount = parseFloat(value);
+        await handleRechargeConfirm(interaction, amount);
       }
-    });
+    }
     
-  } else {
-    const amount = parseFloat(value);
-    await handleRechargeConfirm(interaction, amount);
-  }
-}
-    
-    // Menu durée achat
     if (interaction.customId === 'buy_duration_menu') {
       const days = parseInt(interaction.values[0]);
       await handleBuyConfirm(interaction, days);
     }
+    
+    if (interaction.customId === 'help_menu') {
+      const category = interaction.values[0];
+      interaction.options = {
+        getString: () => category
+      };
+      await handleHelpCommand(interaction);
+    }
   }
+  
+  // ==================== HANDLER BUTTONS ====================
+  if (interaction.isButton()) {
+    
+    if (interaction.customId === 'recharge_sent') {
+      await interaction.update({
+        content: '✅ Parfait ! Dès réception du paiement PayPal, votre solde sera crédité automatiquement.\n\n⏰ Cela peut prendre quelques minutes.',
+        embeds: [],
+        components: []
+      });
+    }
+    
+    if (interaction.customId === 'recharge_cancel') {
+      await interaction.update({
+        content: '❌ Rechargement annulé.',
+        embeds: [],
+        components: []
+      });
+    }
+    
+    if (interaction.customId.startsWith('copy_id_')) {
+      const userId = interaction.customId.split('_')[2];
+      
+      await interaction.reply({
+        content: `📋 **Votre Discord User ID :**\n\`\`\`${userId}\`\`\`\n✅ Copiez cet ID et collez-le dans la note PayPal !`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    if (interaction.customId.startsWith('buy_confirm_')) {
+      const days = parseInt(interaction.customId.split('_')[2]);
+      await handleBuyFinal(interaction, days);
+    }
+    
+    if (interaction.customId === 'buy_cancel') {
+      await interaction.update({
+        content: '❌ Achat annulé.',
+        embeds: [],
+        components: []
+      });
+    }
+  }
+});
   
   // ==================== HANDLER BUTTONS ====================
   if (interaction.isButton()) {
