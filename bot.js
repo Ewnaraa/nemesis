@@ -1279,21 +1279,30 @@ async function handleAdminAction(interaction, action) {
     });
   }
   
-  const txText = recentTransactions.map(tx => {
-    const emoji = tx.type === 'credit' ? '✅' : '❌';
-    const sign = tx.type === 'credit' ? '+' : '-';
-    
-    // ✅ Vérifier timestamp avant getTime()
-    let date = 'Date inconnue';
-    if (tx.timestamp) {
-      const timestamp = new Date(tx.timestamp);
-      if (!isNaN(timestamp.getTime())) {
-        date = `<t:${Math.floor(timestamp.getTime() / 1000)}:R>`;
-      }
+const txText = recentTransactions.map(tx => {
+  const emoji = tx.type === 'credit' ? '✅' : '❌';
+  const sign = tx.type === 'credit' ? '+' : '-';
+  
+  // ✅ Vérifier amount
+  const amount = tx.amount !== undefined && tx.amount !== null ? tx.amount.toFixed(2) : '0.00';
+  
+  // ✅ Vérifier timestamp
+  let date = 'Date inconnue';
+  if (tx.timestamp) {
+    const timestamp = new Date(tx.timestamp);
+    if (!isNaN(timestamp.getTime())) {
+      date = `<t:${Math.floor(timestamp.getTime() / 1000)}:R>`;
     }
-    
-    return `${emoji} <@${tx.userId}> ${sign}${tx.amount.toFixed(2)}€ - ${tx.reason} (${date})`;
-  }).join('\n');
+  }
+  
+  // ✅ Vérifier reason
+  const reason = tx.reason || 'Aucune raison';
+  
+  // ✅ Vérifier userId
+  const userMention = tx.userId ? `<@${tx.userId}>` : 'Utilisateur inconnu';
+  
+  return `${emoji} ${userMention} ${sign}${amount}€ - ${reason} (${date})`;
+}).join('\n');
   
   const txEmbed = new EmbedBuilder()
     .setColor('#10b981')
