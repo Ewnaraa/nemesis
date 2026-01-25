@@ -333,11 +333,13 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
     if (!license) {
       await Log.create({
         licenseKey: key,
+        event: 'verify_failed',
         action: 'VERIFY_FAILED',
         success: false,
         ip: ip,
         discordUserId: discordUserId,
-        error: 'Licence introuvable'
+        error: 'Licence introuvable',
+        timestamp: new Date()
       });
       return { valid: false, error: 'Licence introuvable' };
     }
@@ -556,11 +558,13 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
     // Log succès
     await Log.create({
       licenseKey: key,
+      event: isRealUsage ? 'vote_success' : 'verification',  // ✅ Ajout event
       action: isRealUsage ? 'USAGE' : 'VERIFICATION',
       success: true,
       ip: ip,
       discordUserId: discordUserId,
-      error: null
+      error: null,
+      timestamp: new Date()  // ✅ Ajout timestamp explicite
     });
     
     // Calculer jours restants
