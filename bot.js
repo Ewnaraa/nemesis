@@ -23,6 +23,7 @@ const {
   createPendingRecharge,
   cleanExpiredRecharges
 } = require('./shop-system');
+const { License, Log, Balance } = require('./database');
 
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
