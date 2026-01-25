@@ -23,7 +23,6 @@ const {
   createPendingRecharge,
   cleanExpiredRecharges
 } = require('./shop-system');
-const { License, Log, Balance } = require('./database');
 
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
@@ -31,7 +30,7 @@ const { changelogData } = require('./changelog-data.js');
 
 const express = require('express');
 const cors = require('cors');
-const { connectDatabase, createLicense, verifyLicense, revokeLicense, getStats, License, Log } = require('./database');
+const { connectDatabase, createLicense, verifyLicense, revokeLicense, getStats, License, Log, Balance } = require('./database');
 const { 
   recordReferral, 
   getReferralStats, 
