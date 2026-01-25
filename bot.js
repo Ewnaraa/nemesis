@@ -1244,52 +1244,69 @@ async function handleAdminAction(interaction, action) {
         break;
         
       case 'transactions':
-        // Top 10 dernières transactions
-        const allBalances = await Balance.find({})
-          .sort({ 'transactions.timestamp': -1 })
-          .limit(10);
-        
-        const allTransactions = [];
-        
-        for (const balance of allBalances) {
-          for (const tx of balance.transactions.slice(-10)) {
-            allTransactions.push({
-              userId: balance.discordUserId,
-              ...tx
-            });
-          }
-        }
-        
-        allTransactions.sort((a, b) => b.timestamp - a.timestamp);
-        const recentTransactions = allTransactions.slice(0, 10);
-        
-        if (recentTransactions.length === 0) {
-          return await interaction.update({
-            content: '📜 Aucune transaction récente.',
-            embeds: [],
-            components: []
-          });
-        }
-        
-        const txText = recentTransactions.map(tx => {
-          const emoji = tx.type === 'credit' ? '✅' : '❌';
-          const sign = tx.type === 'credit' ? '+' : '-';
-          const date = `<t:${Math.floor(tx.timestamp.getTime() / 1000)}:R>`;
-          return `${emoji} <@${tx.userId}> ${sign}${tx.amount.toFixed(2)}€ - ${tx.reason} (${date})`;
-        }).join('\n');
-        
-        const txEmbed = new EmbedBuilder()
-          .setColor('#10b981')
-          .setTitle('📜 Transactions Récentes')
-          .setDescription(txText)
-          .setFooter({ text: 'Nemesis Vote • 10 dernières transactions' })
-          .setTimestamp();
-        
-        await interaction.update({
-          embeds: [txEmbed],
-          components: []
+  // Top 10 dernières transactions
+  const allBalances = await Balance.find({})
+    .sort({ 'transactions.timestamp': -1 })
+    .limit(10);
+  
+  const allTransactions = [];
+  
+  for (const balance of allBalances) {
+    for (const tx of balance.transactions.slice(-10)) {
+      // ✅ Vérifier que timestamp existe
+      if (tx.timestamp) {
+        allTransactions.push({
+          userId: balance.discordUserId,
+          ...tx
         });
-        break;
+      }
+    }
+  }
+  
+  allTransactions.sort((a, b) => {
+    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return timeB - timeA;
+  });
+  
+  const recentTransactions = allTransactions.slice(0, 10);
+  
+  if (recentTransactions.length === 0) {
+    return await interaction.update({
+      content: '📜 Aucune transaction récente.',
+      embeds: [],
+      components: []
+    });
+  }
+  
+  const txText = recentTransactions.map(tx => {
+    const emoji = tx.type === 'credit' ? '✅' : '❌';
+    const sign = tx.type === 'credit' ? '+' : '-';
+    
+    // ✅ Vérifier timestamp avant getTime()
+    let date = 'Date inconnue';
+    if (tx.timestamp) {
+      const timestamp = new Date(tx.timestamp);
+      if (!isNaN(timestamp.getTime())) {
+        date = `<t:${Math.floor(timestamp.getTime() / 1000)}:R>`;
+      }
+    }
+    
+    return `${emoji} <@${tx.userId}> ${sign}${tx.amount.toFixed(2)}€ - ${tx.reason} (${date})`;
+  }).join('\n');
+  
+  const txEmbed = new EmbedBuilder()
+    .setColor('#10b981')
+    .setTitle('📜 Transactions Récentes')
+    .setDescription(txText)
+    .setFooter({ text: 'Nemesis Vote • 10 dernières transactions' })
+    .setTimestamp();
+  
+  await interaction.update({
+    embeds: [txEmbed],
+    components: []
+  });
+  break;
         
       default:
         await interaction.update({
