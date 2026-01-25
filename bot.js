@@ -2546,6 +2546,14 @@ async function handleHelpCommand(interaction) {
 // ✅ HANDLER SELECT MENU
 client.on('interactionCreate', async (interaction) => {
   // ==================== HANDLER SELECT MENUS ====================
+
+    if ((interaction.isButton() || interaction.isStringSelectMenu()) && !interaction.customId) {
+    console.warn('[BOT] ⚠️ Interaction sans customId:', {
+      type: interaction.type,
+      user: interaction.user?.tag
+    });
+    return;
+  }
   if (interaction.isStringSelectMenu()) {
     
     // ========== MENU USER /menu ==========
