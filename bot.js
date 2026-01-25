@@ -430,6 +430,11 @@ client.on('interactionCreate', async (interaction) => {
 // ==================== DASHBOARD USER /menu ====================
 async function handleMenuCommand(interaction) {
   try {
+    // ✅ DÉFÉRER IMMÉDIATEMENT
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+    
     // Charger les données utilisateur
     const balance = await getBalance(interaction.user.id);
     
@@ -521,18 +526,31 @@ async function handleMenuCommand(interaction) {
     
     const row = new ActionRowBuilder().addComponents(menu);
     
-    await interaction.reply({ 
+    // ✅ editReply au lieu de reply
+    await interaction.editReply({ 
       embeds: [embed], 
-      components: [row],
-      flags: MessageFlags.Ephemeral 
+      components: [row]
     });
     
   } catch (error) {
     console.error('[MENU] Erreur:', error);
-    await interaction.reply({
-      content: '❌ Erreur lors de l\'ouverture du dashboard.',
-      flags: MessageFlags.Ephemeral
-    });
+    
+    try {
+      if (interaction.deferred) {
+        await interaction.editReply({
+          content: "❌ Erreur lors de l'ouverture du dashboard.",
+          embeds: [],
+          components: []
+        });
+      } else if (!interaction.replied) {
+        await interaction.reply({
+          content: "❌ Erreur lors de l'ouverture du dashboard.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+    } catch (replyError) {
+      console.error('[MENU] Erreur réponse:', replyError);
+    }
   }
 }
 // ==================== HANDLER MENU USER ACTIONS ====================
@@ -748,11 +766,15 @@ case 'referral':
 // ==================== DASHBOARD ADMIN /admin ====================
 async function handleAdminCommand(interaction) {
   try {
+    // ✅ DÉFÉRER IMMÉDIATEMENT
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+    
     // Vérification admin
     if (!ADMIN_IDS.includes(interaction.user.id)) {
-      return interaction.reply({
-        content: '❌ Cette commande est réservée aux administrateurs.',
-        flags: MessageFlags.Ephemeral
+      return interaction.editReply({
+        content: '❌ Cette commande est réservée aux administrateurs.'
       });
     }
     
@@ -851,18 +873,29 @@ async function handleAdminCommand(interaction) {
     
     const row = new ActionRowBuilder().addComponents(menu);
     
-    await interaction.reply({ 
+    // ✅ editReply au lieu de reply
+    await interaction.editReply({ 
       embeds: [embed], 
-      components: [row],
-      flags: MessageFlags.Ephemeral 
+      components: [row]
     });
     
   } catch (error) {
     console.error('[ADMIN] Erreur:', error);
-    await interaction.reply({
-      content: '❌ Erreur lors de l\'ouverture du dashboard admin.',
-      flags: MessageFlags.Ephemeral
-    });
+    
+    try {
+      if (interaction.deferred) {
+        await interaction.editReply({
+          content: "❌ Erreur lors de l'ouverture du dashboard admin."
+        });
+      } else if (!interaction.replied) {
+        await interaction.reply({
+          content: "❌ Erreur lors de l'ouverture du dashboard admin.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+    } catch (replyError) {
+      console.error('[ADMIN] Erreur réponse:', replyError);
+    }
   }
 }
 // ==================== HANDLER ADMIN CATEGORIES ====================
