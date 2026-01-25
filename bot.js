@@ -159,86 +159,7 @@ if (result.valid && isRealUsage) {
   res.json(result);
 });
 
-// ==================== WEBHOOK PAYPAL ====================
-app.post('/webhook/paypal', async (req, res) => {
-  try {
-    console.log('[PAYPAL] 📩 Webhook reçu:', req.body);
-    
-    // TODO: Vérifier signature PayPal (sécurité)
-    
-    const payment = req.body;
-    
-    // Extraire Discord User ID de la note PayPal
-    const discordUserId = payment.note || payment.custom || payment.item_name;
-    
-    if (!discordUserId) {
-      console.error('[PAYPAL] ❌ Pas de Discord User ID dans la note');
-      return res.status(400).send('Missing Discord ID');
-    }
-    
-    const amount = parseFloat(payment.mc_gross || payment.amount);
-    
-    if (!amount || amount <= 0) {
-      console.error('[PAYPAL] ❌ Montant invalide:', amount);
-      return res.status(400).send('Invalid amount');
-    }
-    
-    console.log('[PAYPAL] 💰 Paiement:', {
-      discordUserId,
-      amount,
-      txnId: payment.txn_id
-    });
-    
-    // Créditer le solde
-    const newBalance = await addBalance(
-      discordUserId,
-      amount,
-      'Recharge PayPal',
-      payment.txn_id
-    );
-    
-    console.log('[PAYPAL] ✅ Solde crédité:', newBalance);
-    
-    // Notifier l'user sur Discord
-    try {
-      const user = await client.users.fetch(discordUserId);
-      
-      const embed = new EmbedBuilder()
-        .setColor('#10b981')
-        .setTitle('✅ Rechargement confirmé')
-        .setDescription(`Votre solde a été crédité de **${amount.toFixed(2)}€**`)
-        .addFields(
-          { name: '💰 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
-          { name: '🔢 Transaction', value: payment.txn_id || 'N/A', inline: true }
-        )
-        .setFooter({ text: 'Nemesis Vote • Système de paiement' })
-        .setTimestamp();
-      
-      await user.send({ embeds: [embed] });
-      
-      console.log('[PAYPAL] 📨 User notifié');
-      
-    } catch (error) {
-      console.error('[PAYPAL] ❌ Erreur notification user:', error);
-    }
-    
-    // Log admin
-    await sendLogToChannel('success', `Rechargement PayPal reçu`, {
-      fields: [
-        { name: '👤 Utilisateur', value: `<@${discordUserId}>`, inline: true },
-        { name: '💰 Montant', value: `${amount.toFixed(2)}€`, inline: true },
-        { name: '💳 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
-        { name: '🔢 Transaction', value: payment.txn_id || 'N/A', inline: false }
-      ]
-    });
-    
-    res.status(200).send('OK');
-    
-  } catch (error) {
-    console.error('[PAYPAL] ❌ Erreur webhook:', error);
-    res.status(500).send('Error');
-  }
-});
+
 // Enregistrer un parrainage
 app.post('/api/referral/record', async (req, res) => {
   const { referrerCode, referredUserId, referredUsername } = req.body;
@@ -1591,38 +1512,28 @@ async function handleRechargeConfirm(interaction, amount) {
     const paypalLink = `https://paypal.me/NemesisApp/${amount.toFixed(2)}EUR`;
     
     const embed = new EmbedBuilder()
-      .setColor('#f59e0b')
-      .setTitle(`💰 Rechargement de ${amount.toFixed(2)}€`)
-      .setDescription('**Instructions de paiement PayPal**')
-      .addFields(
-        { 
-          name: '🔗 ÉTAPE 1 : Cliquer sur le lien', 
-          value: `[➡️ Ouvrir PayPal (${amount.toFixed(2)}€)](${paypalLink})`, 
-          inline: false 
-        },
-        { 
-          name: '📝 ÉTAPE 2 : IMPORTANT - Ajouter une note', 
-          value: `Sur la page PayPal, cliquez sur **"Ajouter une note"** et collez ceci :\n\`\`\`${interaction.user.id}\`\`\``, 
-          inline: false 
-        },
-        { 
-          name: '✅ ÉTAPE 3 : Payer', 
-          value: 'Cliquez sur "Suivant" puis validez le paiement', 
-          inline: false 
-        },
-        { 
-          name: '🎉 Résultat', 
-          value: 'Votre solde sera crédité **automatiquement** en quelques secondes !', 
-          inline: false 
-        },
-        { 
-          name: '⏰ Expire dans', 
-          value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, 
-          inline: true 
-        }
-      )
-      .setFooter({ text: '⚠️ Sans la note avec votre ID, le paiement ne sera PAS crédité !' })
-      .setTimestamp();
+  .setColor('#6366f1')
+  .setTitle('💳 Rechargement de solde')
+  .setDescription(
+    `**Montant à payer :** ${amount.toFixed(2)}€\n\n` +
+    `📋 **Instructions :**\n\n` +
+    `1️⃣ Cliquez sur "Payer sur PayPal"\n` +
+    `2️⃣ Choisissez **"Envoyer de l'argent à des amis"**\n` +
+    `3️⃣ **IMPORTANT :** Copiez votre Discord ID ci-dessous\n` +
+    `4️⃣ Collez votre Discord ID dans la **NOTE** PayPal\n` +
+    `5️⃣ Validez le paiement\n` +
+    `6️⃣ Cliquez sur "J'ai payé"\n\n` +
+    `⏰ **Crédit sous 1-24h**\n` +
+    `🆓 **Pas de frais PayPal !**\n\n` +
+    `⚠️ **ATTENTION :** Sans votre Discord ID dans la note, le crédit sera retardé.`
+  )
+  .addFields(
+    { name: '🔢 Votre Discord ID', value: `\`${interaction.user.id}\``, inline: false },
+    { name: '💰 Montant', value: `${amount.toFixed(2)}€`, inline: true },
+    { name: '⏰ Délai', value: 'Sous 24h', inline: true }
+  )
+  .setFooter({ text: 'Nemesis Vote • Rechargement Manuel' })
+  .setTimestamp();
     
     const buttons = new ActionRowBuilder()
       .addComponents(
@@ -2753,18 +2664,128 @@ client.on('interactionCreate', async (interaction) => {
   }
   
   // ==================== HANDLER BUTTONS ====================
+  // ==================== BOUTONS ADMIN PAIEMENTS ====================
+
+if (interaction.customId.startsWith('validate_payment_')) {
+  // Vérification admin
+  const ADMIN_IDS = process.env.ADMIN_IDS?.split(',') || [];
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    return interaction.reply({
+      content: '❌ Seuls les admins peuvent valider les paiements.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+  
+  const parts = interaction.customId.split('_');
+  const userId = parts[2];
+  const amount = parseFloat(parts[3]);
+  
+  try {
+    // Créditer le solde
+    const newBalance = await addBalance(
+      userId,
+      amount,
+      'Recharge PayPal (Manuel)',
+      `manual_${Date.now()}`
+    );
+    
+    // Mettre à jour l'embed
+    const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+      .setColor('#10b981')
+      .setTitle('✅ Paiement crédité')
+      .spliceFields(2, 1, { name: '⏰ Statut', value: '✅ Crédité', inline: true })
+      .addFields(
+        { name: '👤 Crédité par', value: `${interaction.user}`, inline: true },
+        { name: '💳 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true }
+      );
+    
+    await interaction.update({
+      embeds: [updatedEmbed],
+      components: [] // Supprimer les boutons
+    });
+    
+    // Notifier l'utilisateur
+    try {
+      const user = await interaction.client.users.fetch(userId);
+      
+      const userEmbed = new EmbedBuilder()
+        .setColor('#10b981')
+        .setTitle('✅ Solde crédité !')
+        .setDescription('Votre paiement PayPal a été validé par un administrateur.')
+        .addFields(
+          { name: '💰 Montant', value: `+${amount.toFixed(2)}€`, inline: true },
+          { name: '💳 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true }
+        )
+        .setFooter({ text: 'Nemesis Vote • Merci pour votre paiement !' })
+        .setTimestamp();
+      
+      await user.send({ embeds: [userEmbed] });
+      
+    } catch (error) {
+      console.error('[PENDING] Erreur notification user:', error);
+    }
+    
+    console.log('[PENDING] ✅ Paiement crédité:', userId, amount);
+    
+  } catch (error) {
+    console.error('[PENDING] Erreur crédit:', error);
+    await interaction.reply({
+      content: '❌ Erreur lors du crédit du solde.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+
+if (interaction.customId.startsWith('cancel_payment_')) {
+  // Vérification admin
+  const ADMIN_IDS = process.env.ADMIN_IDS?.split(',') || [];
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    return interaction.reply({
+      content: '❌ Seuls les admins peuvent annuler les paiements.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+  
+  const parts = interaction.customId.split('_');
+  const userId = parts[2];
+  
+  // Mettre à jour l'embed
+  const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+    .setColor('#ef4444')
+    .setTitle('❌ Paiement annulé')
+    .spliceFields(2, 1, { name: '⏰ Statut', value: '❌ Annulé', inline: true })
+    .addFields(
+      { name: '👤 Annulé par', value: `${interaction.user}`, inline: true }
+    );
+  
+  await interaction.update({
+    embeds: [updatedEmbed],
+    components: [] // Supprimer les boutons
+  });
+  
+  console.log('[PENDING] ❌ Paiement annulé:', userId);
+}
+
   if (interaction.isButton()) {
     
-    if (interaction.customId === 'recharge_sent') {
+   if (interaction.customId === 'recharge_sent') {
+  const amount = interaction.message.embeds[0]?.fields?.find(f => f.name.includes('Montant'))?.value;
+  const amountValue = amount ? parseFloat(amount.replace(/[^0-9.]/g, '')) : 0;
+  
   const successEmbed = new EmbedBuilder()
     .setColor('#10b981')
     .setTitle('✅ Paiement enregistré')
-    .setDescription('Votre demande de rechargement a été prise en compte !')
-    .addFields(
-      { name: '⏰ Délai', value: 'Quelques minutes', inline: true },
-      { name: '🔔 Notification', value: 'Vous serez notifié par DM', inline: true }
+    .setDescription(
+      '**Merci pour votre paiement !**\n\n' +
+      'Votre demande de rechargement a été enregistrée.\n' +
+      'Un administrateur créditera votre solde sous 24h.\n\n' +
+      '💡 **Vérifiez que vous avez bien mis votre Discord ID dans la note PayPal !**'
     )
-    .setFooter({ text: 'Nemesis Vote • Rechargement' })
+    .addFields(
+      { name: '⏰ Délai', value: '1-24 heures', inline: true },
+      { name: '🔔 Notification', value: 'DM automatique', inline: true }
+    )
+    .setFooter({ text: 'Nemesis Vote • Patience...' })
     .setTimestamp();
   
   const backButton = new ButtonBuilder()
@@ -2779,6 +2800,51 @@ client.on('interactionCreate', async (interaction) => {
     embeds: [successEmbed],
     components: [row]
   });
+  
+  // ✅ ENVOYER DANS LE CHANNEL ADMIN
+  const PENDING_CHANNEL_ID = process.env.PENDING_PAYMENTS_CHANNEL_ID;
+  
+  if (PENDING_CHANNEL_ID) {
+    try {
+      const channel = await interaction.client.channels.fetch(PENDING_CHANNEL_ID);
+      
+      const pendingEmbed = new EmbedBuilder()
+        .setColor('#f59e0b')
+        .setTitle('💰 Paiement en attente')
+        .setDescription(`**Utilisateur :** ${interaction.user.tag} (${interaction.user})\n**Discord ID :** \`${interaction.user.id}\``)
+        .addFields(
+          { name: '💰 Montant', value: `${amountValue.toFixed(2)}€`, inline: true },
+          { name: '📅 Date', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+          { name: '⏰ Statut', value: '⏳ En attente', inline: true },
+          { name: '📋 Action requise', value: `Vérifier PayPal puis :\n\`/addbalance user:${interaction.user} amount:${amountValue}\``, inline: false }
+        )
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .setFooter({ text: 'Nemesis Vote • Paiement Manuel' })
+        .setTimestamp();
+      
+      const validateBtn = new ButtonBuilder()
+        .setCustomId(`validate_payment_${interaction.user.id}_${amountValue}`)
+        .setLabel('✅ Créditer')
+        .setStyle(ButtonStyle.Success);
+      
+      const cancelBtn = new ButtonBuilder()
+        .setCustomId(`cancel_payment_${interaction.user.id}`)
+        .setLabel('❌ Annuler')
+        .setStyle(ButtonStyle.Danger);
+      
+      const actionRow = new ActionRowBuilder().addComponents(validateBtn, cancelBtn);
+      
+      await channel.send({ 
+        embeds: [pendingEmbed],
+        components: [actionRow]
+      });
+      
+      console.log('[PENDING] ✅ Paiement enregistré dans le channel admin');
+      
+    } catch (error) {
+      console.error('[PENDING] ❌ Erreur envoi channel admin:', error);
+    }
+  }
 }
     // Dans client.on('interactionCreate'), section isButton
  if (interaction.customId === 'menu_back') {
