@@ -2546,14 +2546,6 @@ async function handleHelpCommand(interaction) {
 // ✅ HANDLER SELECT MENU
 client.on('interactionCreate', async (interaction) => {
   // ==================== HANDLER SELECT MENUS ====================
-
-    if ((interaction.isButton() || interaction.isStringSelectMenu()) && !interaction.customId) {
-    console.warn('[BOT] ⚠️ Interaction sans customId:', {
-      type: interaction.type,
-      user: interaction.user?.tag
-    });
-    return;
-  }
   if (interaction.isStringSelectMenu()) {
     
     // ========== MENU USER /menu ==========
@@ -2776,6 +2768,10 @@ if (interaction.customId.startsWith('cancel_payment_')) {
 
   if (interaction.isButton()) {
     
+     if (!interaction.customId) {
+    console.warn('[BOT] ⚠️ Button sans customId:', interaction);
+    return;
+  }
    if (interaction.customId === 'recharge_sent') {
   const amount = interaction.message.embeds[0]?.fields?.find(f => f.name.includes('Montant'))?.value;
   const amountValue = amount ? parseFloat(amount.replace(/[^0-9.]/g, '')) : 0;
