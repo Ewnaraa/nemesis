@@ -2646,53 +2646,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
   
- // ==================== HANDLER BUTTONS ====================
-  if (interaction.isButton()) {
-    
-    // Bouton "J'ai envoyé le paiement"
-    if (interaction.customId === 'recharge_sent') {
-      await interaction.update({
-        content: '✅ Parfait ! Dès réception du paiement PayPal, votre solde sera crédité automatiquement.\n\n⏰ Cela peut prendre quelques minutes.',
-        embeds: [],
-        components: []
-      });
-    }
-    
-    // Bouton annuler recharge
-    if (interaction.customId === 'recharge_cancel') {
-      await interaction.update({
-        content: '❌ Rechargement annulé.',
-        embeds: [],
-        components: []
-      });
-    }
-    
-    // Bouton copier ID
-    if (interaction.customId.startsWith('copy_id_')) {
-      const userId = interaction.customId.split('_')[2];
-      
-      await interaction.reply({
-        content: `📋 **Votre Discord User ID :**\n\`\`\`${userId}\`\`\`\n✅ Copiez cet ID et collez-le dans la note PayPal !`,
-        flags: MessageFlags.Ephemeral
-      });
-    }
-    
-    // Bouton confirmer achat
-    if (interaction.customId.startsWith('buy_confirm_')) {
-      const days = parseInt(interaction.customId.split('_')[2]);
-      await handleBuyFinal(interaction, days);
-    }
-    
-    // Bouton annuler achat
-    if (interaction.customId === 'buy_cancel') {
-      await interaction.update({
-        content: '❌ Achat annulé.',
-        embeds: [],
-        components: []
-      });
-    }
-  }
-}); 
+
 async function handleCleanInvalidCommand(interaction) {
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
