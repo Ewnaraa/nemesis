@@ -2646,7 +2646,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
   
-  // ==================== HANDLER BUTTONS ====================
+ // ==================== HANDLER BUTTONS ====================
   if (interaction.isButton()) {
     
     // Bouton "J'ai envoyé le paiement"
@@ -2666,15 +2666,17 @@ client.on('interactionCreate', async (interaction) => {
         components: []
       });
     }
-     // Bouton copier ID
-  if (interaction.customId.startsWith('copy_id_')) {
-    const userId = interaction.customId.split('_')[2];
     
-    await interaction.reply({
-      content: `📋 **Votre Discord User ID :**\n\`\`\`${userId}\`\`\`\n✅ Copiez cet ID et collez-le dans la note PayPal !`,
-      flags: MessageFlags.Ephemeral
-    });
-  }
+    // Bouton copier ID
+    if (interaction.customId.startsWith('copy_id_')) {
+      const userId = interaction.customId.split('_')[2];
+      
+      await interaction.reply({
+        content: `📋 **Votre Discord User ID :**\n\`\`\`${userId}\`\`\`\n✅ Copiez cet ID et collez-le dans la note PayPal !`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
     // Bouton confirmer achat
     if (interaction.customId.startsWith('buy_confirm_')) {
       const days = parseInt(interaction.customId.split('_')[2]);
@@ -2690,8 +2692,7 @@ client.on('interactionCreate', async (interaction) => {
       });
     }
   }
-});
-
+}); 
 async function handleCleanInvalidCommand(interaction) {
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
