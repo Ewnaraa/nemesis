@@ -1693,6 +1693,7 @@ async function handleBuyFinal(interaction, days) {
     
     const license = new License({
       key: key,
+      userId: interaction.user.id,        // ✅ AJOUTE ICI
       discordUserId: interaction.user.id,
       username: interaction.user.username,
       status: 'active',
@@ -1700,7 +1701,7 @@ async function handleBuyFinal(interaction, days) {
       expiresAt: expiresAt,
       usageCount: 0,
       verificationCount: 0,
-      ips: [],
+      ipAddresses: [],              // ✅ Corrigé (pas 'ips')
       lastUsedAt: null,
       logChannelId: null
     });
