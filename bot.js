@@ -371,62 +371,6 @@ async function registerCommands() {
   }
 }
 
-// ========== GESTION DES COMMANDES ==========
-
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  
-  switch (interaction.commandName) {
-    case 'menu':
-      await handleMenuCommand(interaction);
-      break;
-      
-    case 'admin':
-      await handleAdminCommand(interaction);
-      break;
-      
-    // ========== COMMANDES ADMIN DIRECTES ==========
-    case 'generate':
-      await handleGenerateCommand(interaction);
-      break;
-      
-    case 'revoke':
-      await handleRevokeCommand(interaction);
-      break;
-      
-    case 'userinfo':
-      await handleUserInfoCommand(interaction);
-      break;
-      
-    case 'userlogs':
-      await handleUserLogsCommand(interaction);
-      break;
-      
-    case 'reset-ips':
-      await handleResetIpsCommand(interaction);
-      break;
-      
-    case 'unsuspend':
-      await handleUnsuspendCommand(interaction);
-      break;
-      
-    case 'licenses':
-      await handleLicensesCommand(interaction);
-      break;
-      
-    case 'addbalance':
-      await handleAddBalanceCommand(interaction);
-      break;
-      
-    default:
-      await interaction.reply({
-        content: '❌ Commande inconnue.',
-        flags: MessageFlags.Ephemeral
-      });
-  }
-});
-
-// ========== HANDLERS DES COMMANDES ==========
 // ==================== DASHBOARD USER /menu ====================
 async function handleMenuCommand(interaction) {
   try {
