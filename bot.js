@@ -53,6 +53,15 @@ const client = new Client({
   ]
 });
 
+// ========== FONCTION HELPER - NOM DES SERVEURS ==========
+function getServerName(serverId) {
+  const servers = {
+    'karnak': 'Karnak',
+    'hyperion': 'Hyperion',
+    'minya': 'Minya'
+  };
+  return servers[serverId] || 'Serveur inconnu';
+}
 // ========== EXPRESS API ==========
 const app = express();
 
@@ -132,7 +141,7 @@ if (result.valid && isRealUsage) {
     user: result.license.username,
     licenseKey: key,
     fields: [
-      { name: '🎮 Serveur', value: req.body.serverId || 'Inconnu', inline: true },
+      { name: '🎮 Serveur', value: getServerName(req.body.serverId) || 'Serveur inconnu', inline: true },  // ✅ CORRIGÉ
       { name: '📊 Total Votes', value: `${result.license.usageCount}`, inline: true },
       { name: '🌐 IP', value: ip, inline: true },
       { name: '🕒 Heure', value: `<t:${Math.floor(now.getTime() / 1000)}:T>`, inline: true },
