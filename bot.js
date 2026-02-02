@@ -1673,7 +1673,6 @@ async function handleBuyFinal(interaction, days) {
       });
     }
     
-    // ✅ Vérifier si l'utilisateur a déjà une licence active
     const existingLicense = await License.findOne({
       discordUserId: interaction.user.id,
       status: { $in: ['active', 'suspended'] }
@@ -1687,13 +1686,12 @@ async function handleBuyFinal(interaction, days) {
       });
     }
     
-    // ✅ Générer la licence manuellement
     const key = generateLicenseKey();
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     
     const license = new License({
       key: key,
-      userId: interaction.user.id,        // ✅ AJOUTE ICI
+      userId: interaction.user.id,
       discordUserId: interaction.user.id,
       username: interaction.user.username,
       status: 'active',
@@ -1701,12 +1699,36 @@ async function handleBuyFinal(interaction, days) {
       expiresAt: expiresAt,
       usageCount: 0,
       verificationCount: 0,
-      ipAddresses: [],              // ✅ Corrigé (pas 'ips')
+      ipAddresses: [],
       lastUsedAt: null,
       logChannelId: null
     });
     
     await license.save();
+    
+    // ✅ AJOUTER LE RÔLE PREMIUM
+    try {
+      const guild = interaction.guild;
+      const member = await guild.members.fetch(interaction.user.id);
+      
+      let premiumRole = guild.roles.cache.find(r => r.name === PREMIUM_ROLE_NAME);
+      
+      if (!premiumRole) {
+        console.log('[BUY] Rôle Premium introuvable, création...');
+        premiumRole = await guild.roles.create({
+          name: PREMIUM_ROLE_NAME,
+          color: '#FFD700',
+          reason: 'Rôle Premium pour licences actives'
+        });
+      }
+      
+      await member.roles.add(premiumRole);
+      console.log(`[BUY] ✅ Rôle ${PREMIUM_ROLE_NAME} ajouté à ${interaction.user.username}`);
+      
+    } catch (roleError) {
+      console.error('[BUY] Erreur ajout rôle:', roleError);
+      // Ne pas bloquer l'achat si le rôle échoue
+    }
     
     // ✅ Créer le channel privé
     try {
@@ -1719,7 +1741,6 @@ async function handleBuyFinal(interaction, days) {
       console.error('[BUY] Erreur création channel:', error);
     }
     
-    // ✅ Débiter le solde
     const newBalance = await deductBalance(
       interaction.user.id, 
       price, 
@@ -1735,7 +1756,8 @@ async function handleBuyFinal(interaction, days) {
         { name: '🔑 Clé de licence', value: `\`${license.key}\``, inline: false },
         { name: '📅 Durée', value: `${days} jours`, inline: true },
         { name: '📆 Expire le', value: `<t:${Math.floor(license.expiresAt.getTime() / 1000)}:D>`, inline: true },
-        { name: '💰 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true }
+        { name: '💰 Nouveau solde', value: `${newBalance.toFixed(2)}€`, inline: true },
+        { name: '👑 Rôle', value: `${PREMIUM_ROLE_NAME} ajouté !`, inline: true } // ✅ Afficher dans l'embed
       )
       .setFooter({ text: 'Nemesis Vote • Merci pour votre achat !' })
       .setTimestamp();
@@ -1745,7 +1767,6 @@ async function handleBuyFinal(interaction, days) {
       components: []
     });
     
-    // Log admin
     await sendLogToChannel('success', `Achat de licence via le shop`, {
       fields: [
         { name: '👤 Utilisateur', value: `<@${interaction.user.id}>`, inline: true },
@@ -3018,7 +3039,6 @@ async function handleGenerateCommand(interaction) {
     const discordUserId = targetUser.id;
     const username = targetUser.username;
 
-    // Vérifier si l'utilisateur a déjà une licence active
     const existingLicense = await License.findOne({
       discordUserId,
       status: { $in: ['active', 'suspended'] }
@@ -3031,20 +3051,42 @@ async function handleGenerateCommand(interaction) {
       });
     }
 
-    // Générer la licence
     const key = generateLicenseKey();
     const expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
 
     const newLicense = await License.create({
       key,
       username,
-      userId: discordUserId, // Pour compatibilité avec ton schéma
+      userId: discordUserId,
       discordUserId,
       expiresAt,
       status: 'active',
       createdAt: new Date(),
       lastVerified: new Date()
     });
+
+    // ✅ AJOUTER LE RÔLE PREMIUM
+    try {
+      const guild = interaction.guild;
+      const member = await guild.members.fetch(discordUserId);
+      
+      let premiumRole = guild.roles.cache.find(r => r.name === PREMIUM_ROLE_NAME);
+      
+      if (!premiumRole) {
+        console.log('[GENERATE] Rôle Premium introuvable, création...');
+        premiumRole = await guild.roles.create({
+          name: PREMIUM_ROLE_NAME,
+          color: '#FFD700',
+          reason: 'Rôle Premium pour licences actives'
+        });
+      }
+      
+      await member.roles.add(premiumRole);
+      console.log(`[GENERATE] ✅ Rôle ${PREMIUM_ROLE_NAME} ajouté à ${username}`);
+      
+    } catch (roleError) {
+      console.error('[GENERATE] Erreur ajout rôle:', roleError);
+    }
 
     // ✅ CRÉER LE CHANNEL PRIVÉ
     const userChannel = await createUserLogChannel(discordUserId, username);
@@ -3055,7 +3097,6 @@ async function handleGenerateCommand(interaction) {
       console.log(`[GENERATE] Channel créé pour ${username}: ${userChannel.id}`);
     }
 
-    // Log dans la DB
     await Log.create({
       licenseKey: key,
       action: 'activate',
@@ -3063,7 +3104,6 @@ async function handleGenerateCommand(interaction) {
       timestamp: new Date()
     });
 
-    // ✅ Log dans channel global
     await sendLogToChannel('success', `Nouvelle licence générée`, {
       user: interaction.user.username,
       avatar: interaction.user.displayAvatarURL(),
@@ -3076,7 +3116,6 @@ async function handleGenerateCommand(interaction) {
       ]
     });
 
-    // Réponse
     const embed = new EmbedBuilder()
       .setColor('#10b981')
       .setTitle('✅ Licence Générée')
@@ -3086,7 +3125,8 @@ async function handleGenerateCommand(interaction) {
         { name: 'Discord ID', value: discordUserId, inline: true },
         { name: 'Durée', value: `${duration} jours`, inline: true },
         { name: 'Expire', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true },
-        { name: '📊 Channel Logs', value: userChannel ? `<#${userChannel.id}>` : '❌ Erreur création', inline: false }
+        { name: '📊 Channel Logs', value: userChannel ? `<#${userChannel.id}>` : '❌ Erreur création', inline: false },
+        { name: '👑 Rôle', value: `${PREMIUM_ROLE_NAME} ajouté`, inline: false } // ✅ Afficher
       )
       .setFooter({ text: `Généré par ${interaction.user.username}` })
       .setTimestamp();
