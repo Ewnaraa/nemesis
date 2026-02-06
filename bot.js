@@ -110,6 +110,26 @@ app.get('/', (req, res) => {
   });
 });
 
+app.get('/api/version', (req, res) => {
+  res.json({
+    "version": "2.6.1",
+    "title": "Corrections & Sécurité",
+    "releaseDate": "2025-02-07",
+    "highlights": [
+      "✅ Bug du cooldown corrigé",
+      "🛡️ Système de sécurité ajouté"
+    ],
+    "changelog": [{
+      "version": "2.6.1",
+      "date": "2025-02-07",
+      "title": "Corrections & Sécurité",
+      "fixes": [
+        "Cooldown popup synchronisé",
+        "Marge de 60s appliquée"
+      ]
+    }]
+  });
+});
 // Vérifier une licence
 app.post('/api/verify', async (req, res) => {
   const { key, discordUserId, isRealUsage } = req.body;
