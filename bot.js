@@ -65,7 +65,6 @@ function getServerName(serverId) {
 // ========== EXPRESS API ==========
 const app = express();
 
-// ✅ NOUVEAU CODE - CORS avec Chrome Extension
 app.use(cors({
   origin: function (origin, callback) {
     // Autoriser les requêtes sans origine (comme Postman)
@@ -91,7 +90,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With'] // ✅ HEADERS CORRECTS
 }));
 
 // ✅ AJOUTER CETTE LIGNE ICI
@@ -110,24 +109,55 @@ app.get('/', (req, res) => {
   });
 });
 
+// Route pour l'auto-update de l'extension
 app.get('/api/version', (req, res) => {
   res.json({
     "version": "2.6.1",
     "title": "Corrections & Sécurité",
     "releaseDate": "2025-02-07",
+    "downloadUrl": "https://chrome.google.com/webstore/detail/VOTRE_EXTENSION_ID",
+    "mandatory": false,
     "highlights": [
-      "✅ Bug du cooldown corrigé",
-      "🛡️ Système de sécurité ajouté"
+      "✅ Bug du cooldown corrigé (+1min de sécurité)",
+      "🛡️ Système de sécurité avancé disponible",
+      "🔄 Synchronisation améliorée"
     ],
-    "changelog": [{
-      "version": "2.6.1",
-      "date": "2025-02-07",
-      "title": "Corrections & Sécurité",
-      "fixes": [
-        "Cooldown popup synchronisé",
-        "Marge de 60s appliquée"
-      ]
-    }]
+    "changelog": [
+      {
+        "version": "2.6.1",
+        "date": "2025-02-07",
+        "title": "Corrections & Sécurité",
+        "features": [],
+        "fixes": [
+          "Cooldown popup maintenant synchronisé avec le serveur",
+          "Marge de sécurité de 60s appliquée correctement",
+          "Synchronisation manuelle corrigée"
+        ],
+        "improvements": [
+          "Système de sécurité avec rate limiting",
+          "Détection d'abus avancée",
+          "Alertes Discord pour les admins"
+        ]
+      },
+      {
+        "version": "2.6.0",
+        "date": "2025-02-06",
+        "title": "Auto-Update",
+        "features": [
+          "Système d'auto-update automatique",
+          "Notifications de nouvelles versions",
+          "Badge sur l'icône quand une MAJ est dispo"
+        ],
+        "fixes": [],
+        "improvements": [
+          "Vérification toutes les heures",
+          "Changelog intégré"
+        ]
+      }
+    ],
+    "minVersion": "2.0.0",
+    "compatibleWith": ["chrome", "edge", "brave"],
+    "notes": "Cette mise à jour corrige des bugs critiques. Mise à jour recommandée."
   });
 });
 // Vérifier une licence
