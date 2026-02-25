@@ -59,7 +59,8 @@ function getServerName(serverId) {
     'karnak': 'Karnak',
     'hyperion': 'Hyperion',
     'minya': 'Minya',
-    'velora': 'Velora'
+    'velora': 'Velora',
+    'rafal': 'Rafal'
   };
   return servers[serverId] || 'Serveur inconnu';
 }
