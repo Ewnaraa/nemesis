@@ -31,6 +31,7 @@ const { changelogData } = require('./changelog-data.js');
 const express = require('express');
 const cors = require('cors');
 const { connectDatabase, createLicense, verifyLicense, revokeLicense, getStats, License, Log, Balance } = require('./database');
+const { createCaptchaRouter } = require('./captcha-routes');
 const { 
   recordReferral, 
   getReferralStats, 
@@ -100,6 +101,9 @@ app.options('*', cors());
 
 app.use(express.json());
 
+// Proxy captcha : garde les cles 2captcha cote serveur (voir captcha-routes.js)
+app.use(createCaptchaRouter());
+
 // ========== API ROUTES ==========
 
 // Health check
@@ -114,54 +118,42 @@ app.get('/', (req, res) => {
 // Route pour l'auto-update de l'extension
 app.get('/api/version', (req, res) => {
   res.json({
-    "version": "2.6.1",
-    "title": "Corrections & Sécurité",
-    "releaseDate": "2025-02-07",
-    "downloadUrl": "https://chrome.google.com/webstore/detail/VOTRE_EXTENSION_ID",
-    "mandatory": false,
-    "highlights": [
-      "✅ Bug du cooldown corrigé (+1min de sécurité)",
-      "🛡️ Système de sécurité avancé disponible",
-      "🔄 Synchronisation améliorée"
+    version: '2.7.0',
+    title: 'Velora, Rafal, Retrozia & fiabilité',
+    releaseDate: '2026-09-05',
+    downloadUrl: 'https://discord.gg/qWDUE4xXCX',
+    mandatory: false,
+    highlights: [
+      '🎮 Trois nouveaux serveurs : Velora, Rafal et Retrozia',
+      '🔐 Clés captcha désormais côté serveur',
+      '🛠️ Vérification de licence de nouveau fiable'
     ],
-    "changelog": [
+    changelog: [
       {
-        "version": "2.6.1",
-        "date": "2025-02-07",
-        "title": "Corrections & Sécurité",
-        "features": [],
-        "fixes": [
-          "Cooldown popup maintenant synchronisé avec le serveur",
-          "Marge de sécurité de 60s appliquée correctement",
-          "Synchronisation manuelle corrigée"
+        version: '2.7.0',
+        date: '2026-09-05',
+        title: 'Velora, Rafal, Retrozia & fiabilité',
+        features: [
+          '🎮 Support de trois nouveaux serveurs : Velora, Rafal et Retrozia',
+          '🔁 Keep-alive Cloudflare pour Velora et Rafal'
         ],
-        "improvements": [
-          "Système de sécurité avec rate limiting",
-          "Détection d'abus avancée",
-          "Alertes Discord pour les admins"
-        ]
-      },
-      {
-        "version": "2.6.0",
-        "date": "2025-02-06",
-        "title": "Auto-Update",
-        "features": [
-          "Système d'auto-update automatique",
-          "Notifications de nouvelles versions",
-          "Badge sur l'icône quand une MAJ est dispo"
+        fixes: [
+          "La vérification de licence s'exécute enfin de façon fiable",
+          'Accents et emojis corrompus corrigés dans toute l\'interface',
+          'Numéro de version unique : plus de changelog contradictoire'
         ],
-        "fixes": [],
-        "improvements": [
-          "Vérification toutes les heures",
-          "Changelog intégré"
+        improvements: [
+          'Clés captcha déplacées vers le serveur',
+          "60 fois moins d'appels à l'API de licence (1440/jour → 24/jour)"
         ]
       }
     ],
-    "minVersion": "2.0.0",
-    "compatibleWith": ["chrome", "edge", "brave"],
-    "notes": "Cette mise à jour corrige des bugs critiques. Mise à jour recommandée."
+    minVersion: '2.0.0',
+    compatibleWith: ['chrome', 'edge', 'brave'],
+    notes: 'Mise à jour recommandée.'
   });
 });
+
 // Vérifier une licence
 app.post('/api/verify', async (req, res) => {
   const { key, discordUserId, isRealUsage } = req.body;

@@ -1,0 +1,20 @@
+# Dependances — ne jamais commiter (des milliers de fichiers)
+node_modules/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Logs et divers
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editeurs
+.vscode/
+.idea/
+
+# Dossier de travail du script de deploiement
+_clone/

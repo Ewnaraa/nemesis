@@ -326,6 +326,24 @@ async function createLicense(userId, username, options = {}) {
   return license;
 }
 
+// ========== EXEMPTION ADMIN ==========
+//
+// ADMIN_IDS existe deja (utilise partout dans bot.js pour les commandes
+// Discord). On s'appuie dessus plutot que de creer une notion d'admin
+// parallele : un seul endroit a tenir a jour.
+//
+// Note : bot.js fait `process.env.ADMIN_IDS?.split(',')` sans trim. Si la
+// variable Railway contient des espaces apres les virgules ("123, 456"), le
+// second ID ne matche jamais. On trim ici.
+function isAdmin(discordUserId) {
+  if (!discordUserId) return false;
+  const ids = (process.env.ADMIN_IDS || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean);
+  return ids.includes(String(discordUserId).trim());
+}
+
 async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
   try {
     const license = await License.findOne({ key });
@@ -379,8 +397,33 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
     
     const currentIPCount = license.ipAddresses.length;
     const isNewIP = !license.ipAddresses.some(item => item.ip === ip);
-    
-    if (isNewIP) {
+    const adminExempt = isAdmin(discordUserId);
+
+    // Les admins sont exemptes de l'escalade anti-partage. L'IP est quand meme
+    // enregistree (utile pour les logs), mais elle ne declenche ni
+    // avertissement, ni suspension, ni revocation.
+    //
+    // C'est ce mecanisme qui avait revoque le compte du proprietaire lui-meme :
+    // une IP dynamique fait grimper le compteur toute seule jusqu'au seuil de
+    // 6, et la revocation est definitive.
+    if (isNewIP && adminExempt) {
+      license.ipAddresses.push({
+        ip: ip,
+        firstSeen: new Date(),
+        lastSeen: new Date()
+      });
+      console.log(`👑 [SECURITY] Licence ${key} - admin, escalade ignoree (${currentIPCount + 1} IPs)`);
+
+      await Log.create({
+        licenseKey: key,
+        action: 'IP_ADDED',
+        success: true,
+        ip: ip,
+        discordUserId: discordUserId,
+        error: null
+      });
+    }
+    else if (isNewIP) {
       const newIPCount = currentIPCount + 1;
       
       // 🟢 Niveau 1 : OK (0-2 IPs)
@@ -492,6 +535,14 @@ async function verifyLicense(key, ip, discordUserId, isRealUsage = false) {
     }
     
     // Vérifier si suspendue
+    if (license.status === 'suspended' && adminExempt) {
+      // Un admin ne reste pas bloque par une suspension : on la leve.
+      console.log(`👑 [SECURITY] Licence ${key} - suspension levee (admin)`);
+      license.status = 'active';
+      license.suspendedUntil = undefined;
+      await license.save();
+    }
+
     if (license.status === 'suspended') {
       if (license.suspendedUntil && license.suspendedUntil > new Date()) {
         const hoursLeft = Math.ceil((license.suspendedUntil - new Date()) / (1000 * 60 * 60));
@@ -706,6 +757,7 @@ async function sendSecurityAlert({ level, license, message, ips }) {
 // Exporter
 module.exports = {
   connectDatabase,
+  isAdmin,
   createLicense,
   verifyLicense,
   revokeLicense,
